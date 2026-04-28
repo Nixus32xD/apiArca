@@ -23,5 +23,6 @@ Route::prefix('fiscal')
         Route::get('companies/{company}/activities', [FiscalCompanyController::class, 'activities']);
         Route::get('companies/{company}/points-of-sale', [FiscalCompanyController::class, 'pointsOfSale']);
         Route::get('companies/{company}/status', [FiscalCompanyController::class, 'status']);
+        Route::get('companies/{company}/diagnostics', [FiscalCompanyController::class, 'diagnostics']);
         Route::post('companies/{company}/credentials/test', [FiscalCompanyController::class, 'testCredentials']);
     });

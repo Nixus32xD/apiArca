@@ -7,6 +7,7 @@ use App\Models\AccessTicket;
 use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use App\Services\Fiscal\Contracts\Wsfev1Client;
+use App\Services\Fiscal\Support\ArcaErrorMapper;
 use App\Services\Fiscal\Support\SoapXmlClient;
 
 class WSFEv1Service implements Wsfev1Client
@@ -76,6 +77,105 @@ class WSFEv1Service implements Wsfev1Client
         );
     }
 
+    public function requestCaea(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $period,
+        int $order,
+        ?FiscalDocument $document = null,
+        ?string $traceId = null,
+    ): array {
+        return $this->call(
+            $company,
+            'FECAEASolicitar',
+            $this->authXml($company, $ticket)
+                .$this->xmlElement('Periodo', $period)
+                .$this->xmlElement('Orden', $order),
+            'FECAEASolicitarResult',
+            $document,
+            $traceId,
+        );
+    }
+
+    public function consultCaea(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $period,
+        int $order,
+        ?FiscalDocument $document = null,
+        ?string $traceId = null,
+    ): array {
+        return $this->call(
+            $company,
+            'FECAEAConsultar',
+            $this->authXml($company, $ticket)
+                .$this->xmlElement('Periodo', $period)
+                .$this->xmlElement('Orden', $order),
+            'FECAEAConsultarResult',
+            $document,
+            $traceId,
+        );
+    }
+
+    public function reportCaea(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        array $request,
+        ?FiscalDocument $document = null,
+        ?string $traceId = null,
+    ): array {
+        return $this->call(
+            $company,
+            'FECAEARegInformativo',
+            $this->authXml($company, $ticket).$this->xmlElement('FeCAEARegInfReq', $request),
+            'FECAEARegInformativoResult',
+            $document,
+            $traceId,
+        );
+    }
+
+    public function informCaeaWithoutMovement(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $caea,
+        int $pointOfSale,
+        int $voucherType,
+        ?string $traceId = null,
+    ): array {
+        return $this->call(
+            $company,
+            'FECAEASinMovimientoInformar',
+            $this->authXml($company, $ticket)
+                .$this->xmlElement('CAEA', $caea)
+                .$this->xmlElement('PtoVta', $pointOfSale)
+                .$this->xmlElement('CbteTipo', $voucherType),
+            'FECAEASinMovimientoInformarResult',
+            null,
+            $traceId,
+        );
+    }
+
+    public function consultCaeaWithoutMovement(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $caea,
+        int $pointOfSale,
+        int $voucherType,
+        ?string $traceId = null,
+    ): array {
+        return $this->call(
+            $company,
+            'FECAEASinMovimientoConsultar',
+            $this->authXml($company, $ticket)
+                .$this->xmlElement('CAEA', $caea)
+                .$this->xmlElement('PtoVta', $pointOfSale)
+                .$this->xmlElement('CbteTipo', $voucherType),
+            'FECAEASinMovimientoConsultarResult',
+            null,
+            $traceId,
+        );
+    }
+
     public function dummy(FiscalCompany $company, ?string $traceId = null): array
     {
         return $this->call($company, 'FEDummy', '', 'FEDummyResult', null, $traceId);
@@ -130,7 +230,9 @@ class WSFEv1Service implements Wsfev1Client
         );
 
         if (! is_array($result)) {
-            throw new FiscalException("WSFEv1 operation [$operation] returned an invalid response.", 502, 'wsfe_invalid_response');
+            throw new FiscalException(ArcaErrorMapper::messageFor('wsfe_invalid_response'), 502, 'wsfe_invalid_response', [
+                'operation' => $operation,
+            ]);
         }
 
         return $result;

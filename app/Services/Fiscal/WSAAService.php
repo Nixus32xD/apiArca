@@ -7,6 +7,7 @@ use App\Models\FiscalCompany;
 use App\Models\FiscalCredential;
 use App\Services\Fiscal\Contracts\WsaaClient;
 use App\Services\Fiscal\Data\AccessTicketData;
+use App\Services\Fiscal\Support\ArcaErrorMapper;
 use App\Services\Fiscal\Support\SoapXmlClient;
 use App\Services\Fiscal\Support\XmlParser;
 use Carbon\CarbonImmutable;
@@ -41,7 +42,7 @@ class WSAAService implements WsaaClient
         );
 
         if (! is_string($result) || trim($result) === '') {
-            throw new FiscalException('WSAA returned an empty access ticket.', 502, 'wsaa_empty_ticket');
+            throw new FiscalException(ArcaErrorMapper::messageFor('wsaa_empty_ticket'), 502, 'wsaa_empty_ticket');
         }
 
         $ticketXml = html_entity_decode($result, ENT_QUOTES | ENT_XML1, 'UTF-8');
@@ -53,7 +54,7 @@ class WSAAService implements WsaaClient
         $expirationTime = data_get($ticket, 'header.expirationTime');
 
         if (! is_string($token) || ! is_string($sign) || ! is_string($generationTime) || ! is_string($expirationTime)) {
-            throw new FiscalException('WSAA response did not include token, sign or validity times.', 502, 'wsaa_invalid_ticket', [
+            throw new FiscalException(ArcaErrorMapper::messageFor('wsaa_invalid_ticket'), 502, 'wsaa_invalid_ticket', [
                 'response' => $ticket,
             ]);
         }
@@ -115,7 +116,7 @@ class WSAAService implements WsaaClient
         if ($privateKey === false) {
             $this->deleteFiles([$traPath, $certPath, $cmsPath, $smimePath]);
 
-            throw new FiscalException('Fiscal private key could not be opened.', 409, 'private_key_invalid');
+            throw new FiscalException(ArcaErrorMapper::messageFor('private_key_invalid'), 409, 'private_key_invalid');
         }
 
         try {
@@ -126,7 +127,7 @@ class WSAAService implements WsaaClient
                 $signed = openssl_cms_sign($traPath, $cmsPath, 'file://'.$certPath, $privateKey, [], $flags, $encoding);
 
                 if (! $signed) {
-                    throw new FiscalException('OpenSSL could not sign the WSAA TRA.', 500, 'cms_sign_failed');
+                    throw new FiscalException(ArcaErrorMapper::messageFor('cms_sign_failed'), 500, 'cms_sign_failed');
                 }
 
                 return base64_encode((string) file_get_contents($cmsPath));
@@ -135,14 +136,14 @@ class WSAAService implements WsaaClient
             $signed = openssl_pkcs7_sign($traPath, $smimePath, 'file://'.$certPath, $privateKey, [], PKCS7_BINARY);
 
             if (! $signed) {
-                throw new FiscalException('OpenSSL could not sign the WSAA TRA.', 500, 'cms_sign_failed');
+                throw new FiscalException(ArcaErrorMapper::messageFor('cms_sign_failed'), 500, 'cms_sign_failed');
             }
 
             return $this->extractSmimeBase64((string) file_get_contents($smimePath));
         } catch (FiscalException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
-            throw new FiscalException('Unexpected error while signing the WSAA TRA.', 500, 'cms_sign_unexpected_error', [], $exception);
+            throw new FiscalException(ArcaErrorMapper::messageFor('cms_sign_unexpected_error'), 500, 'cms_sign_unexpected_error', [], $exception);
         } finally {
             $this->deleteFiles([$traPath, $certPath, $cmsPath, $smimePath]);
         }

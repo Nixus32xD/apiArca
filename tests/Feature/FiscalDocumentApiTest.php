@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\Fiscal\FiscalException;
 use App\Models\AccessTicket;
 use App\Models\FiscalApiLog;
 use App\Models\FiscalCompany;
@@ -20,9 +21,26 @@ beforeEach(function (): void {
     {
         public int $authorizeCalls = 0;
 
+        public int $consultCalls = 0;
+
+        public ?FiscalException $authorizeException = null;
+
+        public ?FiscalException $consultException = null;
+
+        public array $consultResponse = [
+            'ResultGet' => [
+                'CodAutorizacion' => '12345678901234',
+                'FchVto' => '20260510',
+            ],
+        ];
+
         public function authorize($company, $ticket, array $feCaeRequest, $document = null, ?string $traceId = null): array
         {
             $this->authorizeCalls++;
+
+            if ($this->authorizeException) {
+                throw $this->authorizeException;
+            }
 
             return [
                 'FeCabResp' => [
@@ -45,11 +63,49 @@ beforeEach(function (): void {
 
         public function consult($company, $ticket, int $pointOfSale, int $voucherType, int $voucherNumber, $document = null, ?string $traceId = null): array
         {
+            $this->consultCalls++;
+
+            if ($this->consultException) {
+                throw $this->consultException;
+            }
+
+            return $this->consultResponse;
+        }
+
+        public function requestCaea($company, $ticket, string $period, int $order, $document = null, ?string $traceId = null): array
+        {
             return [
                 'ResultGet' => [
-                    'CodAutorizacion' => '12345678901234',
-                    'FchVto' => '20260510',
+                    'CAEA' => '12345678901234',
+                    'Periodo' => $period,
+                    'Orden' => $order,
                 ],
+            ];
+        }
+
+        public function consultCaea($company, $ticket, string $period, int $order, $document = null, ?string $traceId = null): array
+        {
+            return $this->requestCaea($company, $ticket, $period, $order, $document, $traceId);
+        }
+
+        public function reportCaea($company, $ticket, array $request, $document = null, ?string $traceId = null): array
+        {
+            return [
+                'Resultado' => 'A',
+            ];
+        }
+
+        public function informCaeaWithoutMovement($company, $ticket, string $caea, int $pointOfSale, int $voucherType, ?string $traceId = null): array
+        {
+            return [
+                'Resultado' => 'A',
+            ];
+        }
+
+        public function consultCaeaWithoutMovement($company, $ticket, string $caea, int $pointOfSale, int $voucherType, ?string $traceId = null): array
+        {
+            return [
+                'Resultado' => 'A',
             ];
         }
 
@@ -124,6 +180,86 @@ it('returns the existing document for the same idempotency key', function (): vo
 
     expect(FiscalDocument::query()->count())->toBe(1)
         ->and($this->wsfe->authorizeCalls)->toBe(1);
+});
+
+it('marks HTTP 504 from ARCA as uncertain and stores the expected retry guidance', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $this->wsfe->authorizeException = new FiscalException('raw upstream message', 502, 'arca_http_error', [
+        'status_code' => 504,
+    ]);
+
+    $response = $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id));
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'uncertain')
+        ->assertJsonPath('data.fiscal_status', 'uncertain')
+        ->assertJsonPath('data.error.code', 'arca_http_error')
+        ->assertJsonPath('data.error.message', 'La conexión con ARCA agotó el tiempo de espera. No se sabe si el comprobante fue procesado. Se debe consultar el comprobante antes de volver a emitir.');
+
+    $document = FiscalDocument::query()->firstOrFail();
+
+    expect($document->authorization_type)->toBe('CAE')
+        ->and($document->raw_request)->not->toBeNull();
+});
+
+it('blocks retry when reconciliation is still uncertain', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $this->wsfe->authorizeException = new FiscalException('timeout', 504, 'arca_timeout');
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id))
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'uncertain');
+
+    $document = FiscalDocument::query()->firstOrFail();
+    $this->wsfe->authorizeException = null;
+    $this->wsfe->consultException = new FiscalException('timeout', 504, 'arca_timeout');
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$document->id}/retry")
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'reconcile_required_before_retry');
+
+    expect($this->wsfe->consultCalls)->toBe(1)
+        ->and($this->wsfe->authorizeCalls)->toBe(1);
+});
+
+it('retries safely with the same number when reconciliation says ARCA does not have the voucher', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $this->wsfe->authorizeException = new FiscalException('timeout', 504, 'arca_timeout');
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id))
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'uncertain');
+
+    $document = FiscalDocument::query()->firstOrFail();
+    $this->wsfe->authorizeException = null;
+    $this->wsfe->consultResponse = [
+        'Errors' => [
+            'Err' => [
+                'Code' => '602',
+                'Msg' => 'Comprobante inexistente',
+            ],
+        ],
+    ];
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$document->id}/retry")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'authorized')
+        ->assertJsonPath('data.number', 11)
+        ->assertJsonPath('meta.reconciled_before_retry', true);
+
+    expect($this->wsfe->consultCalls)->toBe(1)
+        ->and($this->wsfe->authorizeCalls)->toBe(2);
 });
 
 it('rejects fiscal API calls without the internal token', function (): void {

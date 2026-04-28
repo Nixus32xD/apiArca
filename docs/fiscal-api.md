@@ -37,6 +37,7 @@ PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate
 GET /api/fiscal/companies/{company}/activities
 GET /api/fiscal/companies/{company}/points-of-sale
 GET /api/fiscal/companies/{company}/status
+GET /api/fiscal/companies/{company}/diagnostics
 POST /api/fiscal/companies/{company}/credentials/test
 
 POST /api/fiscal/documents
@@ -123,12 +124,37 @@ El email del receptor no es obligatorio. Si no se informa receptor, se usa consu
 
 Los puntos de venta habilitados para emision via WSFEv1 se consultan con `GET /api/fiscal/companies/{company}/points-of-sale`, que llama a `FEParamGetPtosVenta`.
 
+## Diagnostico fiscal
+
+`GET /api/fiscal/companies/{company}/diagnostics` devuelve checks separados para:
+
+- empresa/CUIT configurada
+- credencial activa
+- certificado vigente y consistente con la clave privada
+- WSAA/token
+- `FEDummy`
+- WSFEv1 autenticado con `FEParamGetPtosVenta`
+
+Este endpoint esta pensado para que el SaaS muestre errores accionables sin intentar emitir un comprobante.
+
+## CAEA
+
+La capa WSFEv1 expone metodos para las operaciones CAEA:
+
+- `FECAEASolicitar`
+- `FECAEAConsultar`
+- `FECAEARegInformativo`
+- `FECAEASinMovimientoInformar`
+- `FECAEASinMovimientoConsultar`
+
+`FiscalCaeaService` reutiliza WSAA, el cliente SOAP XML y los logs outbound. La persistencia queda preparada en `fiscal_documents` con campos genericos de autorizacion y campos CAEA especificos para reportes posteriores.
+
 ## Tablas
 
 - `fiscal_companies`: empresa fiscal, CUIT, ambiente, defaults, estado y metadata.
 - `fiscal_credentials`: certificado, clave privada, passphrase, CSR, key name y estado de onboarding.
 - `access_tickets`: Token + Sign cifrados, generacion, vencimiento y reutilizaciones.
-- `fiscal_documents`: documento fiscal, origen, numeracion, CAE, estado, payloads y errores.
+- `fiscal_documents`: documento fiscal, origen, numeracion, autorizacion CAE/CAEA, estado, payloads y errores.
 - `fiscal_document_attempts`: intentos por operacion, duracion, request/response y error.
 - `fiscal_document_events`: eventos de trazabilidad del documento.
 - `fiscal_api_logs`: auditoria inbound/outbound con payloads resumidos y sanitizados.
@@ -140,6 +166,16 @@ Los puntos de venta habilitados para emision via WSFEv1 se consultan con `GET /a
 - `rejected`: WSFEv1 rechazo explicitamente.
 - `error`: error local, WSAA o WSFEv1 sin autorizacion.
 - `uncertain`: timeout o respuesta inconclusa; requiere conciliacion.
+
+Ademas, `fiscal_status` normaliza estados para integraciones nuevas:
+
+- `pending`
+- `authorized`
+- `rejected`
+- `uncertain`
+- `pending_report`
+- `reported`
+- `failed`
 
 ## Seguridad
 

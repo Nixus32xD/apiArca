@@ -48,6 +48,66 @@ interface Wsfev1Client
     /**
      * @return array<string, mixed>
      */
+    public function requestCaea(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $period,
+        int $order,
+        ?FiscalDocument $document = null,
+        ?string $traceId = null,
+    ): array;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function consultCaea(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $period,
+        int $order,
+        ?FiscalDocument $document = null,
+        ?string $traceId = null,
+    ): array;
+
+    /**
+     * @param  array<string, mixed>  $request
+     * @return array<string, mixed>
+     */
+    public function reportCaea(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        array $request,
+        ?FiscalDocument $document = null,
+        ?string $traceId = null,
+    ): array;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function informCaeaWithoutMovement(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $caea,
+        int $pointOfSale,
+        int $voucherType,
+        ?string $traceId = null,
+    ): array;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function consultCaeaWithoutMovement(
+        FiscalCompany $company,
+        AccessTicket $ticket,
+        string $caea,
+        int $pointOfSale,
+        int $voucherType,
+        ?string $traceId = null,
+    ): array;
+
+    /**
+     * @return array<string, mixed>
+     */
     public function dummy(FiscalCompany $company, ?string $traceId = null): array;
 
     /**

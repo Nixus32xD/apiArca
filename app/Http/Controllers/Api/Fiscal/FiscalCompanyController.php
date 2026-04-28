@@ -14,6 +14,7 @@ use App\Services\Fiscal\Contracts\Wsfev1Client;
 use App\Services\Fiscal\CredentialCsrService;
 use App\Services\Fiscal\CredentialStore;
 use App\Services\Fiscal\FiscalCompanyResolver;
+use App\Services\Fiscal\FiscalDiagnosticsService;
 use App\Services\Fiscal\TokenCacheService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ class FiscalCompanyController extends Controller
         private readonly CredentialCsrService $credentialCsr,
         private readonly TokenCacheService $tokenCache,
         private readonly Wsfev1Client $wsfev1,
+        private readonly FiscalDiagnosticsService $diagnosticsService,
     ) {}
 
     public function upsert(UpsertFiscalCompanyRequest $request, ?string $company = null): JsonResponse
@@ -258,6 +260,27 @@ class FiscalCompanyController extends Controller
 
             return response()->json([
                 'message' => 'Unexpected fiscal credential test error.',
+                'error_code' => 'unexpected_error',
+            ], 500);
+        }
+    }
+
+    public function diagnostics(Request $request, string $company): JsonResponse
+    {
+        try {
+            $traceId = $request->header('X-Trace-Id') ?: $request->header('X-Request-Id');
+            $fiscalCompany = $this->companyResolver->resolve($company);
+
+            return response()->json([
+                'data' => $this->diagnosticsService->run($fiscalCompany, $traceId),
+            ]);
+        } catch (FiscalException $exception) {
+            return response()->json($exception->toPayload(), $exception->status());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Unexpected fiscal diagnostics error.',
                 'error_code' => 'unexpected_error',
             ], 500);
         }

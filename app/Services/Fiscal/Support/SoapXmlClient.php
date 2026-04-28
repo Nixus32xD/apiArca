@@ -61,7 +61,7 @@ class SoapXmlClient
             );
 
             if (! $response->successful()) {
-                throw new FiscalException("ARCA returned HTTP status [$statusCode].", 502, 'arca_http_error', [
+                throw new FiscalException(ArcaErrorMapper::messageForHttpStatus($statusCode), $statusCode === 504 ? 504 : 502, 'arca_http_error', [
                     'operation' => $operation,
                     'status_code' => $statusCode,
                 ]);
@@ -82,7 +82,7 @@ class SoapXmlClient
                 $traceId,
             );
 
-            throw new FiscalException('Timeout or connection error while calling ARCA.', 504, 'arca_timeout', [
+            throw new FiscalException(ArcaErrorMapper::messageFor('arca_timeout'), 504, 'arca_timeout', [
                 'operation' => $operation,
             ], $exception);
         } catch (FiscalException $exception) {
@@ -101,7 +101,7 @@ class SoapXmlClient
                 $traceId,
             );
 
-            throw new FiscalException('Unexpected error while calling ARCA.', 502, 'arca_unexpected_error', [
+            throw new FiscalException(ArcaErrorMapper::messageFor('arca_unexpected_error'), 502, 'arca_unexpected_error', [
                 'operation' => $operation,
             ], $exception);
         }

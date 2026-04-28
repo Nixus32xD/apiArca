@@ -7,6 +7,7 @@ use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use App\Models\FiscalDocumentAttempt;
 use App\Services\Fiscal\Contracts\Wsfev1Client;
+use App\Services\Fiscal\Support\ArcaErrorMapper;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
@@ -51,6 +52,8 @@ class FiscalInvoiceService
                     'voucher_type' => $normalized['voucher_type'],
                     'concept' => $normalized['concept'],
                     'status' => 'processing',
+                    'fiscal_status' => 'pending',
+                    'authorization_type' => 'CAE',
                     'idempotency_key' => $idempotencyKey,
                     'normalized_payload' => $normalized,
                     'metadata' => $payload['metadata'] ?? null,
@@ -104,16 +107,20 @@ class FiscalInvoiceService
 
             return $this->applyConsultResponse($document, $response);
         } catch (FiscalException $exception) {
-            $this->finishAttempt($attempt, 'failed', $startedAt, errorCode: $exception->errorCode(), errorMessage: $exception->getMessage());
+            $status = ArcaErrorMapper::shouldMarkDocumentUncertain($exception) ? 'uncertain' : 'error';
+            $message = ArcaErrorMapper::messageForException($exception);
+
+            $this->finishAttempt($attempt, 'failed', $startedAt, errorCode: $exception->errorCode(), errorMessage: $message);
 
             $document->forceFill([
-                'status' => $exception->errorCode() === 'arca_timeout' ? 'uncertain' : 'error',
+                'status' => $status,
+                'fiscal_status' => $this->fiscalStatus($status),
                 'error_code' => $exception->errorCode(),
-                'error_message' => $exception->getMessage(),
+                'error_message' => $message,
                 'processed_at' => now(),
             ])->save();
 
-            $this->recordEvent($document, 'reconcile_failed', $exception->getMessage(), [
+            $this->recordEvent($document, 'reconcile_failed', $message, [
                 'error_code' => $exception->errorCode(),
             ]);
 
@@ -134,6 +141,10 @@ class FiscalInvoiceService
             throw new FiscalException('Rejected documents cannot be retried blindly.', 409, 'document_rejected');
         }
 
+        if ($this->isUncertain($document) && ! $document->document_number) {
+            throw new FiscalException('Document is uncertain and has no voucher number to consult before retrying.', 409, 'document_uncertain_without_number');
+        }
+
         $reconciledBeforeRetry = false;
 
         if ($document->document_number) {
@@ -142,6 +153,14 @@ class FiscalInvoiceService
 
             if ($document->status === 'authorized') {
                 return ['document' => $document, 'reconciled_before_retry' => true];
+            }
+
+            if ($this->isUncertain($document) && $document->error_code !== 'arca_voucher_not_found') {
+                throw new FiscalException(
+                    'Could not confirm the voucher status in ARCA. Retry was blocked to avoid duplicating the voucher.',
+                    409,
+                    'reconcile_required_before_retry',
+                );
             }
         }
 
@@ -176,7 +195,10 @@ class FiscalInvoiceService
         $request = $this->buildFeCaeRequest($document);
         $document->forceFill([
             'status' => 'processing',
+            'fiscal_status' => 'pending',
+            'authorization_type' => 'CAE',
             'request_payload' => $request,
+            'raw_request' => $request,
             'error_code' => null,
             'error_message' => null,
         ])->save();
@@ -190,18 +212,20 @@ class FiscalInvoiceService
 
             return $this->applyAuthorizationResponse($document, $response);
         } catch (FiscalException $exception) {
-            $status = $exception->errorCode() === 'arca_timeout' ? 'uncertain' : 'error';
+            $status = ArcaErrorMapper::shouldMarkDocumentUncertain($exception) ? 'uncertain' : 'error';
+            $message = ArcaErrorMapper::messageForException($exception);
 
-            $this->finishAttempt($attempt, 'failed', $startedAt, errorCode: $exception->errorCode(), errorMessage: $exception->getMessage());
+            $this->finishAttempt($attempt, 'failed', $startedAt, errorCode: $exception->errorCode(), errorMessage: $message);
 
             $document->forceFill([
                 'status' => $status,
+                'fiscal_status' => $this->fiscalStatus($status),
                 'error_code' => $exception->errorCode(),
-                'error_message' => $exception->getMessage(),
+                'error_message' => $message,
                 'processed_at' => now(),
             ])->save();
 
-            $this->recordEvent($document, $status, $exception->getMessage(), [
+            $this->recordEvent($document, $status, $message, [
                 'error_code' => $exception->errorCode(),
             ]);
 
@@ -211,6 +235,7 @@ class FiscalInvoiceService
 
             $document->forceFill([
                 'status' => 'error',
+                'fiscal_status' => 'failed',
                 'error_code' => 'unexpected_error',
                 'error_message' => $exception->getMessage(),
                 'processed_at' => now(),
@@ -234,16 +259,23 @@ class FiscalInvoiceService
         $result = (string) (data_get($detail, 'Resultado') ?: data_get($response, 'FeCabResp.Resultado', ''));
         $cae = data_get($detail, 'CAE');
         $caeDueDate = data_get($detail, 'CAEFchVto');
+        $expiresAt = $this->parseAfipDate($caeDueDate);
 
         $status = $result === 'A' && is_string($cae) && $cae !== ''
             ? 'authorized'
             : ($result === 'R' ? 'rejected' : ($errors !== [] ? 'error' : 'uncertain'));
+        $authorizationCode = is_string($cae) && $cae !== '' ? $cae : null;
 
         $document->forceFill([
             'status' => $status,
-            'cae' => is_string($cae) && $cae !== '' ? $cae : null,
-            'cae_expires_at' => $this->parseAfipDate($caeDueDate),
+            'fiscal_status' => $this->fiscalStatus($status),
+            'authorization_type' => 'CAE',
+            'authorization_code' => $authorizationCode,
+            'authorization_expires_at' => $expiresAt,
+            'cae' => $authorizationCode,
+            'cae_expires_at' => $expiresAt,
             'response_payload' => $response,
+            'raw_response' => $response,
             'error_code' => data_get($errors, '0.code') ?? data_get($observations, '0.code'),
             'error_message' => data_get($errors, '0.message') ?? data_get($observations, '0.message'),
             'observations' => [
@@ -256,7 +288,7 @@ class FiscalInvoiceService
 
         $this->recordEvent($document, $status, 'WSFEv1 authorization finished.', [
             'result' => $result,
-            'cae' => $document->cae,
+            'authorization_code' => $document->authorization_code,
         ]);
 
         return $document->refresh();
@@ -272,18 +304,30 @@ class FiscalInvoiceService
         $events = $this->messages(data_get($response, 'Events.Evt', []));
         $cae = data_get($result, 'CodAutorizacion') ?: data_get($result, 'CAE');
         $caeDueDate = data_get($result, 'FchVto') ?: data_get($result, 'CAEFchVto');
+        $authorizationCode = is_string($cae) && $cae !== '' ? $cae : null;
+        $expiresAt = $this->parseAfipDate($caeDueDate);
+        $voucherNotFound = $authorizationCode === null
+            && (ArcaErrorMapper::containsVoucherNotFound($errors) || ($errors === [] && $result === []));
 
-        $status = is_string($cae) && $cae !== ''
+        $status = $authorizationCode !== null
             ? 'authorized'
-            : ($errors !== [] ? 'uncertain' : $document->status);
+            : ($voucherNotFound ? 'error' : ($errors !== [] ? 'uncertain' : $document->status));
+        $authorizationType = $this->authorizationTypeFromConsult($document, $result);
 
         $document->forceFill([
             'status' => $status,
-            'cae' => is_string($cae) && $cae !== '' ? $cae : $document->cae,
-            'cae_expires_at' => $this->parseAfipDate($caeDueDate) ?: $document->cae_expires_at,
+            'fiscal_status' => $this->fiscalStatus($status),
+            'authorization_type' => $authorizationCode !== null ? $authorizationType : $document->authorization_type,
+            'authorization_code' => $authorizationCode ?? $document->authorization_code,
+            'authorization_expires_at' => $expiresAt ?: $document->authorization_expires_at,
+            'cae' => $authorizationType === 'CAE' && $authorizationCode !== null ? $authorizationCode : $document->cae,
+            'cae_expires_at' => $authorizationType === 'CAE' && $expiresAt ? $expiresAt : $document->cae_expires_at,
             'response_payload' => $response,
-            'error_code' => data_get($errors, '0.code'),
-            'error_message' => data_get($errors, '0.message'),
+            'raw_response' => $response,
+            'error_code' => $voucherNotFound ? 'arca_voucher_not_found' : data_get($errors, '0.code'),
+            'error_message' => $voucherNotFound
+                ? ArcaErrorMapper::messageFor('arca_voucher_not_found')
+                : data_get($errors, '0.message'),
             'observations' => [
                 'events' => $events,
                 'errors' => $errors,
@@ -293,6 +337,8 @@ class FiscalInvoiceService
 
         $this->recordEvent($document, 'reconciled', 'Fiscal document reconciled against WSFEv1.', [
             'status' => $status,
+            'authorization_type' => $authorizationType,
+            'authorization_code' => $authorizationCode,
         ]);
 
         return $document->refresh();
@@ -559,7 +605,7 @@ class FiscalInvoiceService
     }
 
     /**
-     * @return array<int, array{code: string|null, message: string|null}>
+     * @return array<int, array{code: string, message: string, arca_code: string|null, arca_message: string|null}>
      */
     private function messages(mixed $value): array
     {
@@ -574,11 +620,48 @@ class FiscalInvoiceService
                 return null;
             }
 
-            return [
-                'code' => isset($item['Code']) ? (string) $item['Code'] : null,
-                'message' => isset($item['Msg']) ? (string) $item['Msg'] : null,
-            ];
+            return ArcaErrorMapper::mapArcaMessage(
+                isset($item['Code']) ? (string) $item['Code'] : null,
+                isset($item['Msg']) ? (string) $item['Msg'] : null,
+            );
         }, $items)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $consultResult
+     */
+    private function authorizationTypeFromConsult(FiscalDocument $document, array $consultResult): string
+    {
+        $fromResult = data_get($consultResult, 'EmisionTipo')
+            ?: data_get($consultResult, 'TipoCodAutorizacion')
+            ?: data_get($consultResult, 'TipoAutorizacion');
+
+        if (is_string($fromResult) && in_array(strtoupper($fromResult), ['CAE', 'CAEA'], true)) {
+            return strtoupper($fromResult);
+        }
+
+        if (is_string($document->authorization_type) && $document->authorization_type !== '') {
+            return strtoupper($document->authorization_type);
+        }
+
+        return 'CAE';
+    }
+
+    private function fiscalStatus(string $status): string
+    {
+        return match ($status) {
+            'processing' => 'pending',
+            'authorized' => 'authorized',
+            'rejected' => 'rejected',
+            'uncertain' => 'uncertain',
+            'error' => 'failed',
+            default => $status,
+        };
+    }
+
+    private function isUncertain(FiscalDocument $document): bool
+    {
+        return $document->status === 'uncertain' || $document->fiscal_status === 'uncertain';
     }
 
     private function recordEvent(FiscalDocument $document, string $type, ?string $message = null, ?array $data = null): void

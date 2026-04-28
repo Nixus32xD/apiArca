@@ -25,7 +25,8 @@ class XmlParser
             $message = data_get($faultData, 'faultstring', 'SOAP fault returned by ARCA.');
             $code = data_get($faultData, 'faultcode');
 
-            throw new FiscalException((string) $message, 502, is_scalar($code) ? (string) $code : 'soap_fault', [
+            throw new FiscalException(ArcaErrorMapper::messageFor('soap_fault', (string) $message), 502, 'soap_fault', [
+                'fault_code' => is_scalar($code) ? (string) $code : null,
                 'fault' => $faultData,
             ]);
         }
@@ -57,7 +58,7 @@ class XmlParser
         libxml_use_internal_errors($previous);
 
         if (! $loaded) {
-            throw new FiscalException('Invalid XML response received from ARCA.', 502, 'invalid_xml', [
+            throw new FiscalException(ArcaErrorMapper::messageFor('invalid_xml'), 502, 'invalid_xml', [
                 'errors' => array_map(fn ($error) => trim($error->message), $errors),
             ]);
         }
