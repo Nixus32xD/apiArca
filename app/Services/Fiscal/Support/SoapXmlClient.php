@@ -35,7 +35,10 @@ class SoapXmlClient
         $statusCode = null;
 
         try {
-            $response = Http::timeout((int) config('fiscal.soap.timeout', 60))
+            $response = Http::retry(3, 2000, function ($exception) {
+                    return $exception instanceof ConnectionException;
+                })
+                ->timeout((int) config('fiscal.soap.timeout', 60))
                 ->connectTimeout((int) config('fiscal.soap.connect_timeout', 15))
                 ->withHeaders(array_filter([
                     'SOAPAction' => $soapAction,
@@ -61,14 +64,25 @@ class SoapXmlClient
             );
 
             if (! $response->successful()) {
-                throw new FiscalException(ArcaErrorMapper::messageForHttpStatus($statusCode), $statusCode === 504 ? 504 : 502, 'arca_http_error', [
-                    'operation' => $operation,
-                    'status_code' => $statusCode,
-                ]);
+                throw new FiscalException(
+                    ArcaErrorMapper::messageForHttpStatus($statusCode),
+                    $statusCode === 504 ? 504 : 502,
+                    'arca_http_error',
+                    [
+                        'operation' => $operation,
+                        'status_code' => $statusCode,
+                        'endpoint' => $endpoint,
+                        'elapsed_seconds' => round(microtime(true) - $startedAt, 3),
+                    ]
+                );
             }
 
             return $this->xmlParser->firstNode($responseBody, $resultNode);
+
         } catch (ConnectionException $exception) {
+
+            $elapsed = round(microtime(true) - $startedAt, 3);
+
             $this->logger->outbound(
                 $operation,
                 $endpoint,
@@ -82,12 +96,31 @@ class SoapXmlClient
                 $traceId,
             );
 
-            throw new FiscalException(ArcaErrorMapper::messageFor('arca_timeout'), 504, 'arca_timeout', [
-                'operation' => $operation,
-            ], $exception);
+            throw new FiscalException(
+                'Timeout al conectar con ARCA durante la operación '.$operation.'. '
+                .'No se recibió respuesta dentro del tiempo configurado.',
+                504,
+                'arca_timeout',
+                [
+                    'operation' => $operation,
+                    'endpoint' => $endpoint,
+                    'timeout_seconds' => (int) config('fiscal.soap.timeout', 60),
+                    'connect_timeout_seconds' => (int) config('fiscal.soap.connect_timeout', 15),
+                    'elapsed_seconds' => $elapsed,
+                    'exception_class' => $exception::class,
+                    'exception_message' => $exception->getMessage(),
+                    'trace_id' => $traceId,
+                    'company_id' => $company?->id,
+                    'document_id' => $document?->id,
+                ],
+                $exception
+            );
+
         } catch (FiscalException $exception) {
             throw $exception;
+
         } catch (Throwable $exception) {
+
             $this->logger->outbound(
                 $operation,
                 $endpoint,
@@ -101,24 +134,33 @@ class SoapXmlClient
                 $traceId,
             );
 
-            throw new FiscalException(ArcaErrorMapper::messageFor('arca_unexpected_error'), 502, 'arca_unexpected_error', [
-                'operation' => $operation,
-            ], $exception);
+            throw new FiscalException(
+                ArcaErrorMapper::messageFor('arca_unexpected_error'),
+                502,
+                'arca_unexpected_error',
+                [
+                    'operation' => $operation,
+                    'endpoint' => $endpoint,
+                    'exception_class' => $exception::class,
+                    'exception_message' => $exception->getMessage(),
+                ],
+                $exception
+            );
         }
     }
 
     private function envelope(string $operation, string $namespace, string $bodyXml): string
     {
         return '<?xml version="1.0" encoding="utf-8"?>'
-            .'<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-            .'xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
-            .'xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
-            .'<soap:Body>'
-            .'<'.$operation.' xmlns="'.$this->escape($namespace).'">'
-            .$bodyXml
-            .'</'.$operation.'>'
-            .'</soap:Body>'
-            .'</soap:Envelope>';
+            . '<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+            . 'xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+            . 'xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+            . '<soap:Body>'
+            . '<' . $operation . ' xmlns="' . $this->escape($namespace) . '">'
+            . $bodyXml
+            . '</' . $operation . '>'
+            . '</soap:Body>'
+            . '</soap:Envelope>';
     }
 
     /**
