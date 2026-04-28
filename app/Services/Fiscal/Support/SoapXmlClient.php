@@ -35,8 +35,8 @@ class SoapXmlClient
         $statusCode = null;
 
         try {
-            $response = Http::timeout((int) config('fiscal.soap.timeout', 30))
-                ->connectTimeout((int) config('fiscal.soap.connect_timeout', 10))
+            $response = Http::timeout((int) config('fiscal.soap.timeout', 60))
+                ->connectTimeout((int) config('fiscal.soap.connect_timeout', 15))
                 ->withHeaders(array_filter([
                     'SOAPAction' => $soapAction,
                     'Content-Type' => 'text/xml; charset=utf-8',
