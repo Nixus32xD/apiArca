@@ -38,7 +38,12 @@ class SoapXmlClient
         $soapOptions = $this->resolveSoapOptions($profile);
 
         try {
-            $response = Http::retry($soapOptions['retry_times'], $soapOptions['retry_sleep_ms'], function ($exception) {
+            $response = Http::withOptions([
+                'curl' => [
+                    CURLOPT_SSL_CIPHER_LIST => 'DEFAULT@SECLEVEL=1',
+                ],
+            ])
+                ->retry($soapOptions['retry_times'], $soapOptions['retry_sleep_ms'], function ($exception) {
                     return $exception instanceof ConnectionException;
                 })
                 ->timeout($soapOptions['timeout'])
@@ -46,7 +51,7 @@ class SoapXmlClient
                 ->withHeaders(array_filter([
                     'SOAPAction' => $soapAction,
                     'Content-Type' => 'text/xml; charset=utf-8',
-                ], fn ($value) => $value !== null))
+                ], fn($value) => $value !== null))
                 ->withBody($envelope, 'text/xml; charset=utf-8')
                 ->post($endpoint);
 
@@ -82,7 +87,6 @@ class SoapXmlClient
             }
 
             return $this->xmlParser->firstNode($responseBody, $resultNode);
-
         } catch (ConnectionException $exception) {
 
             $elapsed = round(microtime(true) - $startedAt, 3);
@@ -101,8 +105,8 @@ class SoapXmlClient
             );
 
             throw new FiscalException(
-                'Timeout al conectar con ARCA durante la operación '.$operation.'. '
-                .'No se recibió respuesta dentro del tiempo configurado.',
+                'Timeout al conectar con ARCA durante la operación ' . $operation . '. '
+                    . 'No se recibió respuesta dentro del tiempo configurado.',
                 504,
                 'arca_timeout',
                 [
@@ -122,10 +126,8 @@ class SoapXmlClient
                 ],
                 $exception
             );
-
         } catch (FiscalException $exception) {
             throw $exception;
-
         } catch (Throwable $exception) {
 
             $this->logger->outbound(
@@ -189,7 +191,7 @@ class SoapXmlClient
     {
         $global = config('fiscal.soap', []);
         $operation = is_string($profile) && $profile !== ''
-            ? config('fiscal.soap.operations.'.$profile, [])
+            ? config('fiscal.soap.operations.' . $profile, [])
             : [];
 
         return [
