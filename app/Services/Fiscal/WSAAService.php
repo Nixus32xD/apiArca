@@ -39,6 +39,8 @@ class WSAAService implements WsaaClient
             '',
             $company,
             null,
+            null,
+            ['profile' => 'wsaa_login'],
         );
 
         if (! is_string($result) || trim($result) === '') {

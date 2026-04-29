@@ -19,6 +19,46 @@ return [
     'soap' => [
         'timeout' => (int) env('FISCAL_SOAP_TIMEOUT', 30),
         'connect_timeout' => (int) env('FISCAL_SOAP_CONNECT_TIMEOUT', 10),
+        'retry_times' => (int) env('FISCAL_SOAP_RETRY_TIMES', 2),
+        'retry_sleep_ms' => (int) env('FISCAL_SOAP_RETRY_SLEEP_MS', 1000),
+        'operations' => [
+            'wsaa_login' => [
+                'timeout' => (int) env('FISCAL_SOAP_WSAA_TIMEOUT', 25),
+                'connect_timeout' => (int) env('FISCAL_SOAP_WSAA_CONNECT_TIMEOUT', 10),
+                'retry_times' => (int) env('FISCAL_SOAP_WSAA_RETRY_TIMES', 2),
+                'retry_sleep_ms' => (int) env('FISCAL_SOAP_WSAA_RETRY_SLEEP_MS', 1000),
+            ],
+            'wsfe_authorize' => [
+                'timeout' => (int) env('FISCAL_SOAP_WSFE_AUTHORIZE_TIMEOUT', 35),
+                'connect_timeout' => (int) env('FISCAL_SOAP_WSFE_AUTHORIZE_CONNECT_TIMEOUT', 12),
+                'retry_times' => (int) env('FISCAL_SOAP_WSFE_AUTHORIZE_RETRY_TIMES', 2),
+                'retry_sleep_ms' => (int) env('FISCAL_SOAP_WSFE_AUTHORIZE_RETRY_SLEEP_MS', 1200),
+            ],
+            'wsfe_last_authorized' => [
+                'timeout' => (int) env('FISCAL_SOAP_WSFE_LAST_AUTH_TIMEOUT', 20),
+                'connect_timeout' => (int) env('FISCAL_SOAP_WSFE_LAST_AUTH_CONNECT_TIMEOUT', 10),
+                'retry_times' => (int) env('FISCAL_SOAP_WSFE_LAST_AUTH_RETRY_TIMES', 2),
+                'retry_sleep_ms' => (int) env('FISCAL_SOAP_WSFE_LAST_AUTH_RETRY_SLEEP_MS', 800),
+            ],
+            'wsfe_consult' => [
+                'timeout' => (int) env('FISCAL_SOAP_WSFE_CONSULT_TIMEOUT', 20),
+                'connect_timeout' => (int) env('FISCAL_SOAP_WSFE_CONSULT_CONNECT_TIMEOUT', 10),
+                'retry_times' => (int) env('FISCAL_SOAP_WSFE_CONSULT_RETRY_TIMES', 2),
+                'retry_sleep_ms' => (int) env('FISCAL_SOAP_WSFE_CONSULT_RETRY_SLEEP_MS', 800),
+            ],
+            'wsfe_catalog' => [
+                'timeout' => (int) env('FISCAL_SOAP_WSFE_CATALOG_TIMEOUT', 15),
+                'connect_timeout' => (int) env('FISCAL_SOAP_WSFE_CATALOG_CONNECT_TIMEOUT', 8),
+                'retry_times' => (int) env('FISCAL_SOAP_WSFE_CATALOG_RETRY_TIMES', 1),
+                'retry_sleep_ms' => (int) env('FISCAL_SOAP_WSFE_CATALOG_RETRY_SLEEP_MS', 500),
+            ],
+            'wsfe_dummy' => [
+                'timeout' => (int) env('FISCAL_SOAP_WSFE_DUMMY_TIMEOUT', 10),
+                'connect_timeout' => (int) env('FISCAL_SOAP_WSFE_DUMMY_CONNECT_TIMEOUT', 5),
+                'retry_times' => (int) env('FISCAL_SOAP_WSFE_DUMMY_RETRY_TIMES', 1),
+                'retry_sleep_ms' => (int) env('FISCAL_SOAP_WSFE_DUMMY_RETRY_SLEEP_MS', 500),
+            ],
+        ],
     ],
 
     'openssl' => [
@@ -65,5 +105,9 @@ return [
 
     'logging' => [
         'max_payload_chars' => (int) env('FISCAL_LOG_MAX_PAYLOAD_CHARS', 8000),
+    ],
+
+    'environment' => [
+        'strict_endpoint_check' => (bool) env('FISCAL_STRICT_ENDPOINT_ENV_CHECK', true),
     ],
 ];

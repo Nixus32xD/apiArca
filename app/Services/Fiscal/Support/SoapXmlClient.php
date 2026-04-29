@@ -29,17 +29,20 @@ class SoapXmlClient
         ?FiscalCompany $company = null,
         ?FiscalDocument $document = null,
         ?string $traceId = null,
+        array $options = [],
     ): array|string {
         $envelope = $this->envelope($operation, $namespace, $bodyXml);
         $startedAt = microtime(true);
         $statusCode = null;
+        $profile = $options['profile'] ?? null;
+        $soapOptions = $this->resolveSoapOptions($profile);
 
         try {
-            $response = Http::retry(3, 2000, function ($exception) {
+            $response = Http::retry($soapOptions['retry_times'], $soapOptions['retry_sleep_ms'], function ($exception) {
                     return $exception instanceof ConnectionException;
                 })
-                ->timeout((int) config('fiscal.soap.timeout', 60))
-                ->connectTimeout((int) config('fiscal.soap.connect_timeout', 15))
+                ->timeout($soapOptions['timeout'])
+                ->connectTimeout($soapOptions['connect_timeout'])
                 ->withHeaders(array_filter([
                     'SOAPAction' => $soapAction,
                     'Content-Type' => 'text/xml; charset=utf-8',
@@ -72,6 +75,7 @@ class SoapXmlClient
                         'operation' => $operation,
                         'status_code' => $statusCode,
                         'endpoint' => $endpoint,
+                        'soap_profile' => $profile,
                         'elapsed_seconds' => round(microtime(true) - $startedAt, 3),
                     ]
                 );
@@ -104,8 +108,11 @@ class SoapXmlClient
                 [
                     'operation' => $operation,
                     'endpoint' => $endpoint,
-                    'timeout_seconds' => (int) config('fiscal.soap.timeout', 60),
-                    'connect_timeout_seconds' => (int) config('fiscal.soap.connect_timeout', 15),
+                    'soap_profile' => $profile,
+                    'timeout_seconds' => $soapOptions['timeout'],
+                    'connect_timeout_seconds' => $soapOptions['connect_timeout'],
+                    'retry_times' => $soapOptions['retry_times'],
+                    'retry_sleep_ms' => $soapOptions['retry_sleep_ms'],
                     'elapsed_seconds' => $elapsed,
                     'exception_class' => $exception::class,
                     'exception_message' => $exception->getMessage(),
@@ -141,6 +148,7 @@ class SoapXmlClient
                 [
                     'operation' => $operation,
                     'endpoint' => $endpoint,
+                    'soap_profile' => $profile,
                     'exception_class' => $exception::class,
                     'exception_message' => $exception->getMessage(),
                 ],
@@ -171,6 +179,24 @@ class SoapXmlClient
         return [
             'operation' => $operation,
             'body' => preg_replace('/<(Token|Sign)>.*?<\/\1>/s', '<$1>[redacted]</$1>', $bodyXml) ?? $bodyXml,
+        ];
+    }
+
+    /**
+     * @return array{timeout:int,connect_timeout:int,retry_times:int,retry_sleep_ms:int}
+     */
+    private function resolveSoapOptions(?string $profile): array
+    {
+        $global = config('fiscal.soap', []);
+        $operation = is_string($profile) && $profile !== ''
+            ? config('fiscal.soap.operations.'.$profile, [])
+            : [];
+
+        return [
+            'timeout' => max(1, (int) ($operation['timeout'] ?? $global['timeout'] ?? 30)),
+            'connect_timeout' => max(1, (int) ($operation['connect_timeout'] ?? $global['connect_timeout'] ?? 10)),
+            'retry_times' => max(1, (int) ($operation['retry_times'] ?? $global['retry_times'] ?? 2)),
+            'retry_sleep_ms' => max(0, (int) ($operation['retry_sleep_ms'] ?? $global['retry_sleep_ms'] ?? 1000)),
         ];
     }
 

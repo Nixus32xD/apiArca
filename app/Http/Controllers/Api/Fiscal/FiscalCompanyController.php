@@ -39,15 +39,24 @@ class FiscalCompanyController extends Controller
 
             if ($company !== null) {
                 $existing = $this->companyResolver->resolve($company);
+                $previousEnvironment = $existing->environment;
                 $existing->update($data);
+                $this->invalidateAccessTicketsIfEnvironmentChanged($existing, $previousEnvironment);
 
                 return response()->json(['data' => $this->companyPayload($existing->refresh())]);
             }
 
-            $fiscalCompany = FiscalCompany::query()->updateOrCreate(
-                ['external_business_id' => $data['external_business_id']],
-                $data,
-            );
+            $fiscalCompany = FiscalCompany::query()
+                ->where('external_business_id', $data['external_business_id'])
+                ->first();
+
+            if ($fiscalCompany) {
+                $previousEnvironment = $fiscalCompany->environment;
+                $fiscalCompany->update($data);
+                $this->invalidateAccessTicketsIfEnvironmentChanged($fiscalCompany, $previousEnvironment);
+            } else {
+                $fiscalCompany = FiscalCompany::query()->create($data);
+            }
 
             return response()
                 ->json(['data' => $this->companyPayload($fiscalCompany->refresh())])
@@ -360,5 +369,14 @@ class FiscalCompanyController extends Controller
             ],
             'onboarding_metadata' => $company->onboarding_metadata,
         ];
+    }
+
+    private function invalidateAccessTicketsIfEnvironmentChanged(FiscalCompany $company, string $previousEnvironment): void
+    {
+        if ($previousEnvironment === $company->environment) {
+            return;
+        }
+
+        $company->accessTickets()->delete();
     }
 }

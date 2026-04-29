@@ -227,6 +227,7 @@ class WSFEv1Service implements Wsfev1Client
             $company,
             $document,
             $traceId,
+            ['profile' => $this->profileForOperation($operation)],
         );
 
         if (! is_array($result)) {
@@ -284,5 +285,19 @@ class WSFEv1Service implements Wsfev1Client
     private function escape(string $value): string
     {
         return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+    }
+
+    private function profileForOperation(string $operation): string
+    {
+        return match ($operation) {
+            'FECAESolicitar' => 'wsfe_authorize',
+            'FECompUltimoAutorizado' => 'wsfe_last_authorized',
+            'FECompConsultar', 'FECAEAConsultar' => 'wsfe_consult',
+            'FEParamGetActividades', 'FEParamGetPtosVenta',
+            'FECAEASolicitar', 'FECAEARegInformativo',
+            'FECAEASinMovimientoInformar', 'FECAEASinMovimientoConsultar' => 'wsfe_catalog',
+            'FEDummy' => 'wsfe_dummy',
+            default => 'wsfe_catalog',
+        };
     }
 }

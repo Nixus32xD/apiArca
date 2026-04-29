@@ -41,6 +41,30 @@ class CredentialStore
             throw new FiscalException('Fiscal certificate is expired.', 409, 'certificate_expired');
         }
 
+        $this->assertEnvironmentEndpointConsistency($company);
+
         return $credential;
+    }
+
+    private function assertEnvironmentEndpointConsistency(FiscalCompany $company): void
+    {
+        if (! (bool) config('fiscal.environment.strict_endpoint_check', true)) {
+            return;
+        }
+
+        $wsaaEndpoint = (string) config('fiscal.wsaa.endpoints.'.$company->environment, '');
+        $wsfeEndpoint = (string) config('fiscal.wsfev1.endpoints.'.$company->environment, '');
+        $concat = strtolower($wsaaEndpoint.' '.$wsfeEndpoint);
+
+        if (
+            $company->environment === 'testing'
+            && (str_contains($concat, 'servicios1.afip.gov.ar') || str_contains($concat, 'wsaa.afip.gov.ar'))
+        ) {
+            throw new FiscalException('Endpoint mismatch for testing environment.', 409, 'endpoint_environment_mismatch');
+        }
+
+        if ($company->environment === 'production' && (str_contains($concat, 'wswhomo') || str_contains($concat, 'wsaahomo'))) {
+            throw new FiscalException('Endpoint mismatch for production environment.', 409, 'endpoint_environment_mismatch');
+        }
     }
 }
