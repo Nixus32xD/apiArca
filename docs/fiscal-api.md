@@ -26,6 +26,30 @@ FISCAL_API_TOKENS=sha256:<hash-del-token>
 
 Todos los endpoints `/api/fiscal/*` pasan por auditoria en `fiscal_api_logs`.
 
+## OpenSSL 3 y TLS contra ARCA/AFIP
+
+Si produccion usa OpenSSL 3, WSFEv1 puede rechazar conexiones a
+`https://servicios1.afip.gov.ar/wsfev1/service.asmx` con:
+
+```text
+cURL error 35: OpenSSL/3.0.x: error:0A00018A:SSL routines::dh key too small
+```
+
+El repo incluye `openssl.cnf` en la raiz para permitir esa conexion con
+`CipherString = DEFAULT@SECLEVEL=1` y `MinProtocol = TLSv1.2`.
+
+En Laravel Cloud configurar la variable de entorno apuntando a la ruta absoluta
+real del archivo en el deploy:
+
+```env
+OPENSSL_CONF=/ruta/al/openssl.cnf
+```
+
+Importante: `FISCAL_OPENSSL_CONF` solo alimenta la configuracion OpenSSL usada
+por la aplicacion para CSR/firma CMS/WSAA. No afecta el handshake TLS de
+cURL/Guzzle que usa `SoapXmlClient` para llamar a WSFEv1. Para cURL/Guzzle debe
+estar definido `OPENSSL_CONF` a nivel de proceso antes de iniciar PHP.
+
 ## Endpoints
 
 ```text

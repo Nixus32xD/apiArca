@@ -53,6 +53,7 @@ Variables fiscales principales:
 FISCAL_API_TOKENS=
 FISCAL_SOAP_TIMEOUT=30
 FISCAL_SOAP_CONNECT_TIMEOUT=10
+OPENSSL_CONF=/ruta/absoluta/al/openssl.cnf
 FISCAL_OPENSSL_CONF=
 FISCAL_OPENSSL_PRIVATE_KEY_BITS=2048
 FISCAL_WSAA_SERVICE=wsfe
@@ -72,6 +73,18 @@ FISCAL_DEFAULT_IVA_ID=5
 ```
 
 `APP_KEY` es importante porque Laravel lo usa para cifrar certificados, claves privadas, passphrases, tokens y signs guardados en base de datos.
+
+### OpenSSL 3 y ARCA/AFIP en produccion
+
+En entornos con OpenSSL 3, algunos endpoints productivos de WSFEv1 pueden fallar con `dh key too small` si el nivel de seguridad queda en el valor por defecto. Este repo incluye `openssl.cnf` para bajar solo el `SECLEVEL` del proceso a `1` y mantener `MinProtocol = TLSv1.2`.
+
+En Laravel Cloud configurar la variable de entorno con la ruta absoluta real del deploy:
+
+```env
+OPENSSL_CONF=/ruta/al/openssl.cnf
+```
+
+`FISCAL_OPENSSL_CONF` se usa como ruta de configuracion para operaciones OpenSSL de la aplicacion, como generacion de CSR y firma CMS/WSAA. No modifica por si sola el handshake TLS de cURL/Guzzle usado para WSFEv1; para eso debe estar configurado `OPENSSL_CONF` en el entorno del proceso PHP antes de iniciar la app.
 
 ## Autenticacion
 
