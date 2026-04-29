@@ -49,17 +49,24 @@ POST /api/fiscal/documents/{id}/reconcile
 
 `{company}` puede ser `external_business_id` o el id interno numerico.
 
+Los endpoints de credenciales quedan dentro de la API fiscal. El SaaS comercial
+puede invocar `credentials/csr` y `credentials/{credential}/certificate`
+unicamente como proxy administrativo para operadores que no tienen acceso directo
+a esta API: no debe generar claves, almacenar `.key`, almacenar `.crt` ni llamar
+a ARCA/AFIP. `credentials/test` queda como operacion interna de la API, no como
+flujo del SaaS.
+
 ## Onboarding de certificados ARCA
 
-Flujo recomendado para que el SaaS no custodie claves privadas:
+Flujo recomendado para que el SaaS no custodie claves privadas ni certificados:
 
 1. El SaaS crea o actualiza la empresa fiscal.
-2. El SaaS llama `POST /api/fiscal/companies/{company}/credentials/csr` con un `key_name` seguro.
+2. El SaaS llama como proxy a `POST /api/fiscal/companies/{company}/credentials/csr` con un `key_name` seguro.
 3. La API genera la clave privada, la guarda cifrada e inactiva, genera el CSR y lo devuelve.
-4. El cliente carga el CSR en ARCA/AFIP y descarga el certificado `.crt`.
-5. El SaaS envia el contenido del `.crt` a `PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate`.
+4. Un operador o proceso administrativo carga el CSR en ARCA/AFIP y descarga el certificado `.crt`.
+5. El SaaS reenvia el contenido del `.crt` a `PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate`.
 6. La API valida que el certificado matchee con la clave privada generada. Si matchea, activa la credencial.
-7. El SaaS puede ejecutar `POST /api/fiscal/companies/{company}/credentials/test`.
+7. La API puede ejecutar `POST /api/fiscal/companies/{company}/credentials/test` como prueba operativa interna.
 
 Generar o reutilizar CSR:
 
@@ -92,6 +99,8 @@ Si el certificado no corresponde a la clave privada guardada, la API responde `4
 {
   "business_id": "tenant-123",
   "sale_id": "sale-1000",
+  "origin_type": "sale",
+  "origin_id": "1000",
   "document_type": "invoice_b",
   "concept": 1,
   "cbte_type": 6,
@@ -120,9 +129,43 @@ Si el certificado no corresponde a la clave privada guardada, la API responde `4
 
 El email del receptor no es obligatorio. Si no se informa receptor, se usa consumidor final: `DocTipo=99`, `DocNro=0`.
 
+`origin_type` y `origin_id` identifican la operacion comercial estable del SaaS
+y tienen prioridad sobre los identificadores legacy `sale_id` y `payment_id`.
+Esto permite recuperar documentos con `GET /api/fiscal/documents/by-origin`
+aunque el SaaS haya perdido o no haya persistido todavia el `fiscal_document_id`.
+
 `activities` es opcional y se traduce a `Actividades/Actividad/Id` de WSFEv1. Los codigos vigentes del emisor se consultan con `GET /api/fiscal/companies/{company}/activities`, que llama a `FEParamGetActividades`.
 
+La respuesta de `activities` queda normalizada para el SaaS en
+`data.activities[]` con `id`, `code` y `name`.
+
 Los puntos de venta habilitados para emision via WSFEv1 se consultan con `GET /api/fiscal/companies/{company}/points-of-sale`, que llama a `FEParamGetPtosVenta`.
+
+La respuesta de `points-of-sale` queda normalizada para el SaaS en
+`data.points_of_sale[]` con `id`, `number`, `type`, `emission_type`,
+`blocked` y `disabled_at`.
+
+## Estado fiscal para el SaaS
+
+`GET /api/fiscal/companies/{company}/status` devuelve una vista resumida para el
+dashboard del SaaS:
+
+```json
+{
+  "data": {
+    "business_id": "tenant-123",
+    "environment": "testing",
+    "enabled": true,
+    "ready": true,
+    "status_label": "Listo",
+    "message": "Empresa fiscal operativa."
+  }
+}
+```
+
+El SaaS debe usar `ready`, `status_label`, `message`, `environment` y
+`defaults`. Los detalles de credenciales y tickets pueden venir en la respuesta
+para diagnostico, pero no forman parte del flujo comercial del SaaS.
 
 ## Diagnostico fiscal
 

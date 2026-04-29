@@ -165,6 +165,33 @@ it('issues a fiscal document and persists CAE without requiring customer email',
         ->and($document->normalized_payload['customer']['doc_number'])->toBe(0);
 });
 
+it('stores the explicit SaaS origin and finds documents by origin', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = array_merge(fiscalPayload($company->external_business_id), [
+        'sale_id' => 'S-000001',
+        'origin_type' => 'sale',
+        'origin_id' => '123',
+        'idempotency_key' => 'idem-origin-123',
+    ]);
+
+    $response = $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $payload);
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('data.origin.type', 'sale')
+        ->assertJsonPath('data.origin.id', '123');
+
+    $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/documents/by-origin?business_id={$company->external_business_id}&origin_type=sale&origin_id=123")
+        ->assertOk()
+        ->assertJsonPath('data.0.origin.type', 'sale')
+        ->assertJsonPath('data.0.origin.id', '123')
+        ->assertJsonPath('data.0.idempotency_key', 'idem-origin-123');
+});
+
 it('returns the existing document for the same idempotency key', function (): void {
     $company = fiscalCompanyWithTicket();
     $payload = fiscalPayload($company->external_business_id);
@@ -272,6 +299,40 @@ it('rejects fiscal API calls without the internal token', function (): void {
     expect(FiscalApiLog::query()->count())->toBe(1);
 });
 
+it('returns normalized company status for the SaaS fiscal dashboard', function (): void {
+    $company = fiscalCompanyWithTicket();
+
+    $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/companies/{$company->external_business_id}/status")
+        ->assertOk()
+        ->assertJsonPath('data.business_id', $company->external_business_id)
+        ->assertJsonPath('data.ready', true)
+        ->assertJsonPath('data.status_label', 'Listo')
+        ->assertJsonPath('data.message', 'Empresa fiscal operativa.');
+});
+
+it('normalizes fiscal activities and points of sale for the SaaS', function (): void {
+    $company = fiscalCompanyWithTicket();
+
+    $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/companies/{$company->external_business_id}/activities")
+        ->assertOk()
+        ->assertJsonPath('data.activities.0.id', 620100)
+        ->assertJsonPath('data.activities.0.code', 620100);
+
+    $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/companies/{$company->external_business_id}/points-of-sale")
+        ->assertOk()
+        ->assertJsonPath('data.points_of_sale.0.id', 1)
+        ->assertJsonPath('data.points_of_sale.0.number', 1)
+        ->assertJsonPath('data.points_of_sale.0.type', 'CAE')
+        ->assertJsonPath('data.points_of_sale.0.emission_type', 'CAE')
+        ->assertJsonPath('data.points_of_sale.0.blocked', false);
+});
+
 it('generates a pending credential CSR and reuses the same key name', function (): void {
     $company = fiscalCompanyForCredentialOnboarding();
     $payload = [
@@ -333,7 +394,7 @@ it('stores a returned ARCA certificate only when it matches the generated privat
 
     $credential->refresh();
 
-    expect($credential->certificate)->toBe($certificate)
+    expect($credential->certificate)->toBe(trim($certificate))
         ->and($credential->certificate_expires_at)->not->toBeNull()
         ->and($credential->status)->toBe('active')
         ->and($credential->active)->toBeTrue();

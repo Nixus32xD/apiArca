@@ -477,6 +477,13 @@ class FiscalInvoiceService
      */
     private function origin(array $payload): array
     {
+        if (! empty($payload['origin_type'])) {
+            return [
+                'type' => (string) $payload['origin_type'],
+                'id' => isset($payload['origin_id']) ? (string) $payload['origin_id'] : null,
+            ];
+        }
+
         if (! empty($payload['sale_id'])) {
             return ['type' => 'sale', 'id' => (string) $payload['sale_id']];
         }

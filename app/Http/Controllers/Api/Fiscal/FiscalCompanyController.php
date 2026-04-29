@@ -15,6 +15,7 @@ use App\Services\Fiscal\CredentialCsrService;
 use App\Services\Fiscal\CredentialStore;
 use App\Services\Fiscal\FiscalCompanyResolver;
 use App\Services\Fiscal\FiscalDiagnosticsService;
+use App\Services\Fiscal\Support\ArcaErrorMapper;
 use App\Services\Fiscal\TokenCacheService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -204,6 +205,11 @@ class FiscalCompanyController extends Controller
             $ticket = $fiscalCompany->accessTickets()
                 ->where('service', (string) config('fiscal.wsaa.service', 'wsfe'))
                 ->first();
+            $credentialConfigured = (bool) $credential;
+            $credentialActive = (bool) $credential?->active;
+            $ticketConfigured = (bool) $ticket;
+            $ticketValid = (bool) ($ticket && $ticket->expiration_time->isFuture());
+            $ready = (bool) $fiscalCompany->enabled && $credentialActive;
 
             return response()->json([
                 'data' => [
@@ -213,21 +219,30 @@ class FiscalCompanyController extends Controller
                     'legal_name' => $fiscalCompany->legal_name,
                     'environment' => $fiscalCompany->environment,
                     'enabled' => $fiscalCompany->enabled,
+                    'ready' => $ready,
+                    'status_label' => $ready ? 'Listo' : 'Revisar setup',
+                    'message' => $this->statusMessage(
+                        (bool) $fiscalCompany->enabled,
+                        $credentialConfigured,
+                        $credentialActive,
+                        $ticketConfigured,
+                        $ticketValid,
+                    ),
                     'defaults' => [
                         'point_of_sale' => $fiscalCompany->default_point_of_sale,
                         'cbte_type' => $fiscalCompany->default_voucher_type,
                     ],
                     'credential' => [
-                        'configured' => (bool) $credential,
+                        'configured' => $credentialConfigured,
                         'id' => $credential?->id,
                         'key_name' => $credential?->key_name,
                         'status' => $credential?->status,
-                        'active' => (bool) $credential?->active,
+                        'active' => $credentialActive,
                         'certificate_expires_at' => $credential?->certificate_expires_at?->toIso8601String(),
                     ],
                     'access_ticket' => [
-                        'configured' => (bool) $ticket,
-                        'valid' => (bool) ($ticket && $ticket->expiration_time->isFuture()),
+                        'configured' => $ticketConfigured,
+                        'valid' => $ticketValid,
                         'generation_time' => $ticket?->generation_time?->toIso8601String(),
                         'expiration_time' => $ticket?->expiration_time?->toIso8601String(),
                         'last_used_at' => $ticket?->last_used_at?->toIso8601String(),
@@ -301,14 +316,28 @@ class FiscalCompanyController extends Controller
             $fiscalCompany = $this->companyResolver->resolve($company);
             $this->credentialStore->activeFor($fiscalCompany);
             $ticket = $this->tokenCache->get($fiscalCompany);
-            $activities = $this->wsfev1->activities($fiscalCompany, $ticket, $request->header('X-Trace-Id') ?: $request->header('X-Request-Id'));
+            $response = $this->wsfev1->activities($fiscalCompany, $ticket, $request->header('X-Trace-Id') ?: $request->header('X-Request-Id'));
+            $apiError = $this->catalogError($response);
+
+            if ($apiError !== null) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => $apiError,
+                    'data' => [
+                        'company_id' => $fiscalCompany->id,
+                        'business_id' => $fiscalCompany->external_business_id,
+                        'environment' => $fiscalCompany->environment,
+                        'activities' => [],
+                    ],
+                ]);
+            }
 
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'environment' => $fiscalCompany->environment,
-                    'activities' => $activities,
+                    'activities' => $this->normalizeActivities($response),
                 ],
             ]);
         } catch (FiscalException $exception) {
@@ -329,14 +358,28 @@ class FiscalCompanyController extends Controller
             $fiscalCompany = $this->companyResolver->resolve($company);
             $this->credentialStore->activeFor($fiscalCompany);
             $ticket = $this->tokenCache->get($fiscalCompany);
-            $pointsOfSale = $this->wsfev1->pointsOfSale($fiscalCompany, $ticket, $request->header('X-Trace-Id') ?: $request->header('X-Request-Id'));
+            $response = $this->wsfev1->pointsOfSale($fiscalCompany, $ticket, $request->header('X-Trace-Id') ?: $request->header('X-Request-Id'));
+            $apiError = $this->catalogError($response);
+
+            if ($apiError !== null) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => $apiError,
+                    'data' => [
+                        'company_id' => $fiscalCompany->id,
+                        'business_id' => $fiscalCompany->external_business_id,
+                        'environment' => $fiscalCompany->environment,
+                        'points_of_sale' => [],
+                    ],
+                ]);
+            }
 
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'environment' => $fiscalCompany->environment,
-                    'points_of_sale' => $pointsOfSale,
+                    'points_of_sale' => $this->normalizePointsOfSale($response),
                 ],
             ]);
         } catch (FiscalException $exception) {
@@ -378,5 +421,165 @@ class FiscalCompanyController extends Controller
         }
 
         $company->accessTickets()->delete();
+    }
+
+    private function statusMessage(
+        bool $enabled,
+        bool $credentialConfigured,
+        bool $credentialActive,
+        bool $ticketConfigured,
+        bool $ticketValid,
+    ): string {
+        if (! $enabled) {
+            return 'Empresa fiscal deshabilitada en la API fiscal.';
+        }
+
+        if (! $credentialConfigured) {
+            return 'Empresa fiscal creada; falta cargar o activar la credencial fiscal en la API.';
+        }
+
+        if (! $credentialActive) {
+            return 'La credencial fiscal existe pero no esta activa en la API.';
+        }
+
+        if (! $ticketConfigured) {
+            return 'Empresa fiscal operativa. El ticket de acceso se generara al consultar o emitir.';
+        }
+
+        if (! $ticketValid) {
+            return 'Empresa fiscal operativa. El ticket de acceso vencido se renovara al consultar o emitir.';
+        }
+
+        return 'Empresa fiscal operativa.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return list<array{id: int, code: int, name: string|null}>
+     */
+    private function normalizeActivities(array $response): array
+    {
+        return collect($this->rowsFrom($response, [
+            'ResultGet.Actividad',
+            'Actividad',
+            'activities',
+        ]))
+            ->map(function (array $row): ?array {
+                $id = data_get($row, 'id') ?? data_get($row, 'Id') ?? data_get($row, 'code');
+
+                if (! is_numeric($id)) {
+                    return null;
+                }
+
+                return [
+                    'id' => (int) $id,
+                    'code' => (int) $id,
+                    'name' => $this->stringOrNull(data_get($row, 'name') ?? data_get($row, 'Desc') ?? data_get($row, 'description')),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return list<array<string, mixed>>
+     */
+    private function normalizePointsOfSale(array $response): array
+    {
+        return collect($this->rowsFrom($response, [
+            'ResultGet.PtoVenta',
+            'PtoVenta',
+            'points_of_sale',
+        ]))
+            ->map(function (array $row): ?array {
+                $number = data_get($row, 'number')
+                    ?? data_get($row, 'Nro')
+                    ?? data_get($row, 'point_of_sale')
+                    ?? data_get($row, 'id');
+
+                if (! is_numeric($number)) {
+                    return null;
+                }
+
+                $emissionType = $this->stringOrNull(
+                    data_get($row, 'type')
+                    ?? data_get($row, 'EmisionTipo')
+                    ?? data_get($row, 'emission_type')
+                );
+                $blocked = data_get($row, 'blocked') ?? data_get($row, 'Bloqueado');
+
+                return [
+                    'id' => (int) $number,
+                    'number' => (int) $number,
+                    'type' => $emissionType,
+                    'emission_type' => $emissionType,
+                    'blocked' => $blocked === true || strtoupper((string) $blocked) === 'S',
+                    'disabled_at' => $this->stringOrNull(data_get($row, 'disabled_at') ?? data_get($row, 'FchBaja')),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @param  list<string>  $paths
+     * @return list<array<string, mixed>>
+     */
+    private function rowsFrom(array $response, array $paths): array
+    {
+        foreach ($paths as $path) {
+            $value = data_get($response, $path);
+
+            if (! is_array($value) || $value === []) {
+                continue;
+            }
+
+            if (array_is_list($value)) {
+                return array_values(array_filter($value, fn (mixed $row): bool => is_array($row)));
+            }
+
+            return [$value];
+        }
+
+        return array_is_list($response)
+            ? array_values(array_filter($response, fn (mixed $row): bool => is_array($row)))
+            : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array{code: string, message: string, arca_code: string|null, arca_message: string|null}|null
+     */
+    private function catalogError(array $response): ?array
+    {
+        $error = data_get($response, 'Errors.Err');
+
+        if (! is_array($error) || $error === []) {
+            return null;
+        }
+
+        $row = array_is_list($error) ? ($error[0] ?? null) : $error;
+
+        if (! is_array($row)) {
+            return null;
+        }
+
+        return ArcaErrorMapper::mapArcaMessage(
+            $this->stringOrNull(data_get($row, 'Code')),
+            $this->stringOrNull(data_get($row, 'Msg')),
+        );
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        if (! is_scalar($value) || $value === '') {
+            return null;
+        }
+
+        return (string) $value;
     }
 }

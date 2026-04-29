@@ -1,53 +1,73 @@
-# Cambios requeridos en el SaaS para integrarse con la API fiscal ARCA
+# Contrato SaaS - API fiscal ARCA
 
-## 1) Variables y configuración operativa
-- Definir por tenant/empresa un mapeo explícito de ambiente fiscal (`testing` o `production`) y **no mezclarlo** en runtime.
-- Guardar y enviar siempre `business_id`/`external_business_id` consistente por tenant.
-- Versionar configuración de punto de venta y tipo de comprobante por ambiente.
+Este documento registra el contrato esperado entre el SaaS comercial y esta API
+fiscal. La regla operativa actual es que el SaaS no conoce WSAA, WSFEv1, SOAP,
+certificados ni claves privadas: solo llama a esta API por HTTP.
 
-## 2) Flujo de onboarding de certificados
-- Mantener flujo CSR -> carga en ARCA -> carga de `.crt` en API.
-- No almacenar private keys en el SaaS cuando se use el flujo CSR server-side.
-- Agregar pantalla de “estado fiscal” consumiendo:
+## 1) Configuracion operativa
+
+- El SaaS debe enviar siempre un `business_id` o `external_business_id`
+  consistente por tenant.
+- El ambiente fiscal (`testing` o `production`) se configura por empresa fiscal
+  en la API y se sincroniza desde el SaaS como dato de tenant.
+- Punto de venta y tipo de comprobante se versionan por empresa/ambiente en el
+  SaaS y se validan antes de emitir.
+
+## 2) Onboarding de certificados
+
+- El onboarding de CSR, certificados y claves privadas queda bajo control de la
+  API fiscal.
+- El SaaS comercial puede llamar como proxy administrativo a:
+  - `POST /api/fiscal/companies/{company}/credentials/csr`
+  - `PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate`
+- El SaaS comercial no debe llamar a:
+  - `POST /api/fiscal/companies/{company}/credentials/test`
+- El SaaS no debe generar claves, almacenar `.key`, almacenar `.crt` ni conocer
+  WSAA/WSFEv1/SOAP.
+- Para UI administrativa del SaaS se debe consumir:
   - `GET /api/fiscal/companies/{company}/status`
   - `GET /api/fiscal/companies/{company}/diagnostics`
 
-## 3) Flujo de emisión robusto
-- Tratar `POST /api/fiscal/documents` como operación potencialmente lenta y con estados intermedios.
-- Implementar idempotencia estricta en SaaS (`idempotency_key` estable por operación comercial).
-- Si el documento queda `uncertain`, ejecutar estrategia de conciliación:
+## 3) Flujo de emision
+
+- El SaaS emite mediante `POST /api/fiscal/documents`.
+- Debe enviar `idempotency_key` estable por operacion comercial.
+- Debe enviar `origin_type` y `origin_id` para poder recuperar documentos con
+  `GET /api/fiscal/documents/by-origin`.
+- Si un documento queda `uncertain`, el SaaS debe conciliar antes de reintentar:
   1. `POST /api/fiscal/documents/{id}/reconcile`
-  2. Si corresponde, `POST /api/fiscal/documents/{id}/retry`
-- No reintentar “a ciegas” en frontend sin revisar estado previo.
+  2. `POST /api/fiscal/documents/{id}/retry`, solo si corresponde.
 
-## 4) Timeouts y UX del lado SaaS
-- Configurar timeout de cliente HTTP del SaaS mayor al promedio esperado, pero con UX asíncrona:
-  - mostrar estado “procesando”
-  - usar polling al endpoint `GET /api/fiscal/documents/{id}`
-- Evitar bloqueos largos de UI esperando CAE en una única request.
+## 4) Observabilidad
 
-## 5) Observabilidad y trazabilidad
-- Enviar `X-Trace-Id` en todas las llamadas a la API fiscal.
-- Registrar en SaaS: `trace_id`, `business_id`, `document_id`, `idempotency_key`, `endpoint`, `status`.
-- Correlacionar logs SaaS con `fiscal_api_logs` de la API.
+- El SaaS debe enviar `X-Trace-Id` en todas las llamadas.
+- La API registra auditoria en `fiscal_api_logs` y conserva intentos/eventos por
+  documento fiscal.
+- Los logs permiten correlacionar `business_id`, `document_id`,
+  `idempotency_key`, endpoint, estado y `trace_id`.
 
-## 6) Reglas de negocio que debe validar el SaaS antes de emitir
-- Punto de venta habilitado para la empresa y ambiente.
-- Tipo de comprobante coherente con operación y cliente.
-- Importes consistentes (total, neto, IVA, tributos, exentos).
-- Datos fiscales mínimos del receptor según tipo de comprobante.
+## 5) Endpoints consumibles por el SaaS
 
-## 7) Recomendaciones de integración por etapas
-1. **Etapa 1**: onboarding y diagnóstico en UI administrativa.
-2. **Etapa 2**: emisión con idempotencia + estados + polling.
-3. **Etapa 3**: manejo de `uncertain` con reconcile/retry automático controlado.
-4. **Etapa 4**: alertas operativas (timeouts, errores ARCA frecuentes, certificados próximos a vencer).
+- `POST /api/fiscal/companies`
+- `PUT /api/fiscal/companies/{company}`
+- `GET /api/fiscal/companies/{company}/status`
+- `GET /api/fiscal/companies/{company}/diagnostics`
+- `GET /api/fiscal/companies/{company}/activities`
+- `GET /api/fiscal/companies/{company}/points-of-sale`
+- `POST /api/fiscal/documents`
+- `GET /api/fiscal/documents/{id}`
+- `GET /api/fiscal/documents/by-origin`
+- `POST /api/fiscal/documents/{id}/reconcile`
+- `POST /api/fiscal/documents/{id}/retry`
 
-## 8) Checklist mínimo de salida a producción
+## 6) Checklist de salida
+
 - [ ] Tenant fiscal configurado con ambiente correcto.
-- [ ] Credencial activa validada con `credentials/test`.
+- [ ] Empresa fiscal sincronizada en la API.
+- [ ] Estado fiscal `ready=true` o diagnostico visible para operar.
 - [ ] Punto de venta validado con `points-of-sale`.
-- [ ] Actividades vigentes verificadas con `activities`.
-- [ ] `idempotency_key` estable y única por transacción.
+- [ ] Actividades vigentes verificadas con `activities` cuando apliquen.
+- [ ] `idempotency_key` estable y unico por transaccion.
+- [ ] `origin_type` y `origin_id` enviados por el SaaS.
 - [ ] `X-Trace-Id` implementado en todas las requests.
-- [ ] Flujo de conciliación implementado para estados inciertos.
+- [ ] Flujo de conciliacion implementado para estados inciertos.

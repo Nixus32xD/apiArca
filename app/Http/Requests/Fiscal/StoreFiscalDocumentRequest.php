@@ -19,6 +19,8 @@ class StoreFiscalDocumentRequest extends FormRequest
         return [
             'business_id' => ['required_without:external_business_id', 'string', 'max:120'],
             'external_business_id' => ['required_without:business_id', 'string', 'max:120'],
+            'origin_type' => ['nullable', 'string', 'in:sale,payment,manual'],
+            'origin_id' => ['nullable', 'string', 'max:120'],
             'sale_id' => ['nullable', 'string', 'max:120'],
             'payment_id' => ['nullable', 'string', 'max:120'],
             'document_type' => ['nullable', 'string', 'max:80'],
