@@ -392,7 +392,9 @@ it('returns normalized company status for the SaaS fiscal dashboard', function (
         ->assertJsonPath('data.business_id', $company->external_business_id)
         ->assertJsonPath('data.ready', true)
         ->assertJsonPath('data.status_label', 'Listo')
-        ->assertJsonPath('data.message', 'Empresa fiscal operativa.');
+        ->assertJsonPath('data.message', 'Empresa fiscal operativa.')
+        ->assertJsonPath('data.credential.csr_generated', false)
+        ->assertJsonPath('data.credential.certificate_loaded', true);
 });
 
 it('normalizes fiscal activities and points of sale for the SaaS', function (): void {

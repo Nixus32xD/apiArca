@@ -238,6 +238,8 @@ class FiscalCompanyController extends Controller
                         'key_name' => $credential?->key_name,
                         'status' => $credential?->status,
                         'active' => $credentialActive,
+                        'csr_generated' => $this->credentialHasValue($credential?->csr),
+                        'certificate_loaded' => $this->credentialHasValue($credential?->certificate),
                         'certificate_expires_at' => $credential?->certificate_expires_at?->toIso8601String(),
                     ],
                     'access_ticket' => [
@@ -581,5 +583,10 @@ class FiscalCompanyController extends Controller
         }
 
         return (string) $value;
+    }
+
+    private function credentialHasValue(mixed $value): bool
+    {
+        return is_string($value) && trim($value) !== '';
     }
 }
