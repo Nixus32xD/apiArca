@@ -289,6 +289,89 @@ it('retries safely with the same number when reconciliation says ARCA does not h
         ->and($this->wsfe->authorizeCalls)->toBe(2);
 });
 
+it('requests and consults CAEA for a fiscal company', function (): void {
+    $company = fiscalCompanyWithTicket();
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/companies/{$company->external_business_id}/caea/request", [
+            'period' => '202604',
+            'order' => 1,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.caea.code', '12345678901234')
+        ->assertJsonPath('data.caea.period', '202604')
+        ->assertJsonPath('data.caea.order', 1);
+
+    $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/companies/{$company->external_business_id}/caea/consult?period=202604&order=1")
+        ->assertOk()
+        ->assertJsonPath('data.caea.code', '12345678901234');
+});
+
+it('issues a CAEA document and reports it immediately by default', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = array_merge(fiscalPayload($company->external_business_id), [
+        'authorization_type' => 'CAEA',
+        'idempotency_key' => 'idem-caea-100',
+        'caea' => [
+            'code' => '12345678901234',
+            'period' => '202604',
+            'order' => 1,
+            'from' => 20260401,
+            'to' => 20260415,
+            'due_date' => '2026-04-15',
+            'report_deadline' => '2026-04-20',
+        ],
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'authorized')
+        ->assertJsonPath('data.fiscal_status', 'reported')
+        ->assertJsonPath('data.authorization_type', 'CAEA')
+        ->assertJsonPath('data.authorization_code', '12345678901234')
+        ->assertJsonPath('data.number', 11)
+        ->assertJsonPath('data.caea.period', '202604')
+        ->assertJsonPath('data.caea.order', 1);
+
+    $document = FiscalDocument::query()->firstOrFail();
+
+    expect($document->raw_request['FeDetReq']['FECAEADetRequest'][0]['CAEA'])->toBe('12345678901234')
+        ->and($document->attempts()->where('operation', 'FECAEARegInformativo')->exists())->toBeTrue();
+});
+
+it('keeps a CAEA document pending report when requested', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = array_merge(fiscalPayload($company->external_business_id), [
+        'authorization_type' => 'CAEA',
+        'idempotency_key' => 'idem-caea-pending',
+        'caea' => [
+            'code' => '12345678901234',
+            'report_now' => false,
+        ],
+    ]);
+
+    $response = $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'authorized')
+        ->assertJsonPath('data.fiscal_status', 'pending_report')
+        ->assertJsonPath('data.authorization_type', 'CAEA');
+
+    $documentId = $response->json('data.id');
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$documentId}/caea/report")
+        ->assertOk()
+        ->assertJsonPath('data.fiscal_status', 'reported');
+});
+
 it('rejects fiscal API calls without the internal token', function (): void {
     fiscalCompanyWithTicket();
 

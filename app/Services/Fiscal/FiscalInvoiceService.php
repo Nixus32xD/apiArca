@@ -10,7 +10,6 @@ use App\Services\Fiscal\Contracts\Wsfev1Client;
 use App\Services\Fiscal\Support\ArcaErrorMapper;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -21,6 +20,8 @@ class FiscalInvoiceService
         private readonly CredentialStore $credentialStore,
         private readonly TokenCacheService $tokenCache,
         private readonly Wsfev1Client $wsfev1,
+        private readonly FiscalWsfeRequestBuilder $requestBuilder,
+        private readonly FiscalCaeaService $caeaService,
     ) {}
 
     /**
@@ -40,10 +41,11 @@ class FiscalInvoiceService
         }
 
         $normalized = $this->normalizePayload($company, $payload);
+        $authorizationType = strtoupper((string) ($payload['authorization_type'] ?? 'CAE'));
 
         try {
             /** @var FiscalDocument $document */
-            $document = DB::transaction(function () use ($company, $payload, $normalized, $idempotencyKey): FiscalDocument {
+            $document = DB::transaction(function () use ($company, $payload, $normalized, $idempotencyKey, $authorizationType): FiscalDocument {
                 return $company->documents()->create([
                     'origin_type' => $normalized['origin']['type'],
                     'origin_id' => $normalized['origin']['id'],
@@ -53,7 +55,14 @@ class FiscalInvoiceService
                     'concept' => $normalized['concept'],
                     'status' => 'processing',
                     'fiscal_status' => 'pending',
-                    'authorization_type' => 'CAE',
+                    'authorization_type' => $authorizationType,
+                    'authorization_code' => $authorizationType === 'CAEA' ? (string) data_get($payload, 'caea.code') : null,
+                    'caea_period' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.period') : null,
+                    'caea_order' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.order') : null,
+                    'caea_from' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.from') : null,
+                    'caea_to' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.to') : null,
+                    'caea_due_date' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.due_date') : null,
+                    'caea_report_deadline' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.report_deadline') : null,
                     'idempotency_key' => $idempotencyKey,
                     'normalized_payload' => $normalized,
                     'metadata' => $payload['metadata'] ?? null,
@@ -74,7 +83,9 @@ class FiscalInvoiceService
         ]);
 
         return [
-            'document' => $this->authorizeDocument($document, false, $traceId),
+            'document' => $authorizationType === 'CAEA'
+                ? $this->authorizeCaeaDocument($document, (bool) data_get($payload, 'caea.report_now', true), $traceId)
+                : $this->authorizeDocument($document, false, $traceId),
             'idempotent_replay' => false,
         ];
     }
@@ -247,6 +258,57 @@ class FiscalInvoiceService
         }
     }
 
+    private function authorizeCaeaDocument(FiscalDocument $document, bool $reportNow, ?string $traceId = null): FiscalDocument
+    {
+        $document->loadMissing('company');
+        $ticket = $this->tokenCache->get($document->company);
+
+        if (! $document->document_number) {
+            $last = $this->wsfev1->lastAuthorized(
+                $document->company,
+                $ticket,
+                $document->point_of_sale,
+                $document->voucher_type,
+                $document,
+                $traceId,
+            );
+
+            $document->forceFill([
+                'document_number' => ((int) data_get($last, 'CbteNro', 0)) + 1,
+            ])->save();
+        }
+
+        $caea = $document->authorization_code;
+
+        if (! is_string($caea) || $caea === '') {
+            throw new FiscalException('CAEA code is required to issue a CAEA document.', 422, 'caea_code_required');
+        }
+
+        $request = $this->requestBuilder->caea($document, $caea);
+
+        $document->forceFill([
+            'status' => 'authorized',
+            'fiscal_status' => 'pending_report',
+            'authorization_type' => 'CAEA',
+            'authorization_code' => $caea,
+            'request_payload' => $request,
+            'raw_request' => $request,
+            'error_code' => null,
+            'error_message' => null,
+        ])->save();
+
+        $this->recordEvent($document, 'caea_assigned', 'Fiscal document assigned to CAEA.', [
+            'authorization_code' => $caea,
+            'report_now' => $reportNow,
+        ]);
+
+        if (! $reportNow) {
+            return $document->refresh();
+        }
+
+        return $this->caeaService->report($document, $request, $traceId)['document'];
+    }
+
     /**
      * @param  array<string, mixed>  $response
      */
@@ -259,7 +321,7 @@ class FiscalInvoiceService
         $result = (string) (data_get($detail, 'Resultado') ?: data_get($response, 'FeCabResp.Resultado', ''));
         $cae = data_get($detail, 'CAE');
         $caeDueDate = data_get($detail, 'CAEFchVto');
-        $expiresAt = $this->parseAfipDate($caeDueDate);
+        $expiresAt = $this->requestBuilder->parseAfipDate($caeDueDate);
 
         $status = $result === 'A' && is_string($cae) && $cae !== ''
             ? 'authorized'
@@ -305,7 +367,7 @@ class FiscalInvoiceService
         $cae = data_get($result, 'CodAutorizacion') ?: data_get($result, 'CAE');
         $caeDueDate = data_get($result, 'FchVto') ?: data_get($result, 'CAEFchVto');
         $authorizationCode = is_string($cae) && $cae !== '' ? $cae : null;
-        $expiresAt = $this->parseAfipDate($caeDueDate);
+        $expiresAt = $this->requestBuilder->parseAfipDate($caeDueDate);
         $voucherNotFound = $authorizationCode === null
             && (ArcaErrorMapper::containsVoucherNotFound($errors) || ($errors === [] && $result === []));
 
@@ -392,11 +454,11 @@ class FiscalInvoiceService
             ],
             'currency' => $payload['currency'] ?? config('fiscal.defaults.currency', 'PES'),
             'currency_rate' => $this->decimal($payload['currency_rate'] ?? config('fiscal.defaults.currency_rate', 1), 6),
-            'voucher_date' => $this->afipDate($payload['voucher_date'] ?? now()),
+            'voucher_date' => $this->requestBuilder->afipDate($payload['voucher_date'] ?? now()),
             'service_dates' => [
-                'from' => isset($payload['service_dates']['from']) ? $this->afipDate($payload['service_dates']['from']) : null,
-                'to' => isset($payload['service_dates']['to']) ? $this->afipDate($payload['service_dates']['to']) : null,
-                'payment_due_date' => isset($payload['service_dates']['payment_due_date']) ? $this->afipDate($payload['service_dates']['payment_due_date']) : null,
+                'from' => isset($payload['service_dates']['from']) ? $this->requestBuilder->afipDate($payload['service_dates']['from']) : null,
+                'to' => isset($payload['service_dates']['to']) ? $this->requestBuilder->afipDate($payload['service_dates']['to']) : null,
+                'payment_due_date' => isset($payload['service_dates']['payment_due_date']) ? $this->requestBuilder->afipDate($payload['service_dates']['payment_due_date']) : null,
             ],
             'items' => $payload['items'] ?? [],
             'associated_vouchers' => $payload['associated_vouchers'] ?? [],
@@ -411,64 +473,7 @@ class FiscalInvoiceService
      */
     private function buildFeCaeRequest(FiscalDocument $document): array
     {
-        $payload = $document->normalized_payload;
-        $amounts = $payload['amounts'];
-        $customer = $payload['customer'];
-
-        $detail = [
-            'Concepto' => $payload['concept'],
-            'DocTipo' => $customer['doc_type'],
-            'DocNro' => $customer['doc_number'],
-            'CbteDesde' => $document->document_number,
-            'CbteHasta' => $document->document_number,
-            'CbteFch' => $payload['voucher_date'],
-            'ImpTotal' => $amounts['imp_total'],
-            'ImpTotConc' => $amounts['imp_tot_conc'],
-            'ImpNeto' => $amounts['imp_neto'],
-            'ImpOpEx' => $amounts['imp_op_ex'],
-            'ImpTrib' => $amounts['imp_trib'],
-            'ImpIVA' => $amounts['imp_iva'],
-            'MonId' => $payload['currency'],
-            'MonCotiz' => $payload['currency_rate'],
-            'CondicionIVAReceptorId' => $customer['tax_condition_id'],
-        ];
-
-        if ((int) $payload['concept'] !== 1) {
-            $detail['FchServDesde'] = $payload['service_dates']['from'];
-            $detail['FchServHasta'] = $payload['service_dates']['to'];
-            $detail['FchVtoPago'] = $payload['service_dates']['payment_due_date'];
-        }
-
-        if ($amounts['iva_items'] !== []) {
-            $detail['Iva'] = ['AlicIva' => $amounts['iva_items']];
-        }
-
-        if ($amounts['trib_items'] !== []) {
-            $detail['Tributos'] = ['Tributo' => $amounts['trib_items']];
-        }
-
-        if ($payload['associated_vouchers'] !== []) {
-            $detail['CbtesAsoc'] = ['CbteAsoc' => $payload['associated_vouchers']];
-        }
-
-        if ($payload['optional_fields'] !== []) {
-            $detail['Opcionales'] = ['Opcional' => $payload['optional_fields']];
-        }
-
-        if ($payload['activities'] !== []) {
-            $detail['Actividades'] = ['Actividad' => $payload['activities']];
-        }
-
-        return [
-            'FeCabReq' => [
-                'CantReg' => 1,
-                'PtoVta' => $document->point_of_sale,
-                'CbteTipo' => $document->voucher_type,
-            ],
-            'FeDetReq' => [
-                'FECAEDetRequest' => [$detail],
-            ],
-        ];
+        return $this->requestBuilder->cae($document);
     }
 
     /**
@@ -679,20 +684,6 @@ class FiscalInvoiceService
             'data' => $data,
             'created_at' => now(),
         ]);
-    }
-
-    private function afipDate(mixed $value): string
-    {
-        return Carbon::parse($value)->format('Ymd');
-    }
-
-    private function parseAfipDate(mixed $value): ?Carbon
-    {
-        if (! is_string($value) || $value === '') {
-            return null;
-        }
-
-        return Carbon::createFromFormat('Ymd', $value)->startOfDay();
     }
 
     private function decimal(mixed $value, int $scale = 2): string

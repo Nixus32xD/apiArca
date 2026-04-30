@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Fiscal\FiscalCaeaController;
 use App\Http\Controllers\Api\Fiscal\FiscalCompanyController;
 use App\Http\Controllers\Api\Fiscal\FiscalDocumentController;
 use App\Http\Middleware\AuditFiscalApiRequest;
@@ -14,6 +15,7 @@ Route::prefix('fiscal')
         Route::get('documents/{document}', [FiscalDocumentController::class, 'show'])->whereNumber('document');
         Route::post('documents/{document}/retry', [FiscalDocumentController::class, 'retry'])->whereNumber('document');
         Route::post('documents/{document}/reconcile', [FiscalDocumentController::class, 'reconcile'])->whereNumber('document');
+        Route::post('documents/{document}/caea/report', [FiscalCaeaController::class, 'report'])->whereNumber('document');
 
         Route::post('companies', [FiscalCompanyController::class, 'upsert']);
         Route::put('companies/{company}', [FiscalCompanyController::class, 'upsert']);
@@ -25,4 +27,8 @@ Route::prefix('fiscal')
         Route::get('companies/{company}/status', [FiscalCompanyController::class, 'status']);
         Route::get('companies/{company}/diagnostics', [FiscalCompanyController::class, 'diagnostics']);
         Route::post('companies/{company}/credentials/test', [FiscalCompanyController::class, 'testCredentials']);
+        Route::post('companies/{company}/caea/request', [FiscalCaeaController::class, 'request']);
+        Route::get('companies/{company}/caea/consult', [FiscalCaeaController::class, 'consult']);
+        Route::post('companies/{company}/caea/without-movement', [FiscalCaeaController::class, 'informWithoutMovement']);
+        Route::get('companies/{company}/caea/without-movement', [FiscalCaeaController::class, 'consultWithoutMovement']);
     });

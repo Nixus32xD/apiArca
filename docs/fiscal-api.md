@@ -69,6 +69,12 @@ GET /api/fiscal/documents/{id}
 GET /api/fiscal/documents/by-origin
 POST /api/fiscal/documents/{id}/retry
 POST /api/fiscal/documents/{id}/reconcile
+POST /api/fiscal/documents/{id}/caea/report
+
+POST /api/fiscal/companies/{company}/caea/request
+GET /api/fiscal/companies/{company}/caea/consult
+POST /api/fiscal/companies/{company}/caea/without-movement
+GET /api/fiscal/companies/{company}/caea/without-movement
 ```
 
 `{company}` puede ser `external_business_id` o el id interno numerico.
@@ -206,7 +212,7 @@ Este endpoint esta pensado para que el SaaS muestre errores accionables sin inte
 
 ## CAEA
 
-La capa WSFEv1 expone metodos para las operaciones CAEA:
+La API soporta el ciclo CAEA:
 
 - `FECAEASolicitar`
 - `FECAEAConsultar`
@@ -214,7 +220,69 @@ La capa WSFEv1 expone metodos para las operaciones CAEA:
 - `FECAEASinMovimientoInformar`
 - `FECAEASinMovimientoConsultar`
 
-`FiscalCaeaService` reutiliza WSAA, el cliente SOAP XML y los logs outbound. La persistencia queda preparada en `fiscal_documents` con campos genericos de autorizacion y campos CAEA especificos para reportes posteriores.
+Solicitar CAEA:
+
+```json
+{
+  "period": "202604",
+  "order": 1
+}
+```
+
+Emitir documento con CAEA:
+
+```json
+{
+  "business_id": "tenant-123",
+  "origin_type": "sale",
+  "origin_id": "1000",
+  "authorization_type": "CAEA",
+  "caea": {
+    "code": "12345678901234",
+    "period": "202604",
+    "order": 1,
+    "from": 20260401,
+    "to": 20260415,
+    "due_date": "2026-04-15",
+    "report_deadline": "2026-04-20",
+    "report_now": true
+  },
+  "amounts": {
+    "imp_total": 121,
+    "imp_neto": 100
+  },
+  "idempotency_key": "sale-1000-invoice-caea"
+}
+```
+
+`report_now` viene `true` por defecto: la API crea el documento con `authorization_type=CAEA`, arma `FECAEARegInformativo`, lo informa a ARCA y deja `fiscal_status=reported` si la respuesta es aprobada. Si se manda `false`, el documento queda `fiscal_status=pending_report` y luego puede informarse con `POST /api/fiscal/documents/{id}/caea/report`.
+
+### Reporte automatico CAEA
+
+Cada CAEA solicitado o consultado se persiste en `fiscal_caeas`.
+
+El comando programado:
+
+```bash
+php artisan arca:caea:report-due
+```
+
+corre todos los dias a las 01:00. Reporta automaticamente los CAEA vencidos por fin de periodo o por fecha tope:
+
+- si existen documentos con `fiscal_status=pending_report`, ejecuta `FECAEARegInformativo`;
+- si no existen documentos para ese CAEA, ejecuta `FECAEASinMovimientoInformar` usando el punto de venta y tipo de comprobante default de la empresa fiscal.
+
+Para validar sin llamar a ARCA:
+
+```bash
+php artisan arca:caea:report-due --dry-run
+```
+
+En produccion debe estar activo el scheduler de Laravel:
+
+```bash
+php artisan schedule:run
+```
 
 ## Tablas
 

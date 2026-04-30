@@ -44,6 +44,11 @@ class FiscalCompany extends Model
         return $this->hasMany(AccessTicket::class);
     }
 
+    public function caeas(): HasMany
+    {
+        return $this->hasMany(FiscalCaea::class);
+    }
+
     public function documents(): HasMany
     {
         return $this->hasMany(FiscalDocument::class);

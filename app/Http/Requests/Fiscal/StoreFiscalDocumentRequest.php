@@ -24,6 +24,7 @@ class StoreFiscalDocumentRequest extends FormRequest
             'sale_id' => ['nullable', 'string', 'max:120'],
             'payment_id' => ['nullable', 'string', 'max:120'],
             'document_type' => ['nullable', 'string', 'max:80'],
+            'authorization_type' => ['nullable', 'string', 'in:CAE,CAEA,cae,caea'],
             'point_of_sale' => ['nullable', 'integer', 'min:1', 'max:99998'],
             'concept' => ['nullable', 'integer', 'in:1,2,3'],
             'cbte_type' => ['nullable', 'integer', 'min:1'],
@@ -64,6 +65,15 @@ class StoreFiscalDocumentRequest extends FormRequest
             'activities' => ['nullable', 'array'],
             'activities.*' => ['required'],
             'metadata' => ['nullable', 'array'],
+            'caea' => ['nullable', 'array', 'required_if:authorization_type,CAEA,caea'],
+            'caea.code' => ['required_if:authorization_type,CAEA,caea', 'string', 'digits:14'],
+            'caea.period' => ['nullable', 'string', 'digits:6'],
+            'caea.order' => ['nullable', 'integer', 'in:1,2'],
+            'caea.from' => ['nullable', 'integer', 'min:1'],
+            'caea.to' => ['nullable', 'integer', 'min:1'],
+            'caea.due_date' => ['nullable', 'date'],
+            'caea.report_deadline' => ['nullable', 'date'],
+            'caea.report_now' => ['nullable', 'boolean'],
             'idempotency_key' => ['required', 'string', 'max:120'],
         ];
     }
