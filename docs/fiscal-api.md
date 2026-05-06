@@ -129,16 +129,19 @@ Si el certificado no corresponde a la clave privada guardada, la API responde `4
 {
   "business_id": "tenant-123",
   "sale_id": "sale-1000",
-  "origin_type": "sale",
-  "origin_id": "1000",
-  "document_type": "invoice_b",
+  "origin": {
+    "type": "sale",
+    "id": "1000"
+  },
+  "invoice_mode": "auto",
   "concept": 1,
-  "cbte_type": 6,
   "point_of_sale": 1,
   "customer": {
-    "doc_type": 99,
-    "doc_number": 0,
-    "name": "Consumidor Final"
+    "name": "Cliente SA",
+    "document_type": "CUIT",
+    "document_number": "30712345671",
+    "iva_condition": "responsable_inscripto",
+    "address": "Av. Fiscal 123"
   },
   "amounts": {
     "imp_total": 121,
@@ -158,6 +161,14 @@ Si el certificado no corresponde a la clave privada guardada, la API responde `4
 ```
 
 El email del receptor no es obligatorio. Si no se informa receptor, se usa consumidor final: `DocTipo=99`, `DocNro=0`.
+
+Con `invoice_mode=auto`, la API resuelve `cbte_type` segun la condicion fiscal del emisor (`fiscal_condition` en `fiscal_companies`) y la condicion IVA del receptor:
+
+- emisor `monotributo` o `exento`: Factura C (`cbte_type=11`);
+- emisor `responsable_inscripto` + receptor `responsable_inscripto`: Factura A (`cbte_type=1`);
+- emisor `responsable_inscripto` + receptor no RI: Factura B (`cbte_type=6`).
+
+El payload legacy con `origin_type`, `origin_id`, `document_type`, `cbte_type`, `customer.doc_type`, `customer.doc_number` y `customer.tax_condition_id` se mantiene por compatibilidad, pero el SaaS comercial debe preferir `invoice_mode=auto`.
 
 `origin_type` y `origin_id` identifican la operacion comercial estable del SaaS
 y tienen prioridad sobre los identificadores legacy `sale_id` y `payment_id`.
@@ -184,6 +195,7 @@ dashboard del SaaS:
 {
   "data": {
     "business_id": "tenant-123",
+    "fiscal_condition": "monotributo",
     "environment": "testing",
     "enabled": true,
     "ready": true,
@@ -286,7 +298,7 @@ php artisan schedule:run
 
 ## Tablas
 
-- `fiscal_companies`: empresa fiscal, CUIT, ambiente, defaults, estado y metadata.
+- `fiscal_companies`: empresa fiscal, CUIT, condicion fiscal del emisor, ambiente, defaults, estado y metadata.
 - `fiscal_credentials`: certificado, clave privada, passphrase, CSR, key name y estado de onboarding.
 - `access_tickets`: Token + Sign cifrados, generacion, vencimiento y reutilizaciones.
 - `fiscal_documents`: documento fiscal, origen, numeracion, autorizacion CAE/CAEA, estado, payloads y errores.

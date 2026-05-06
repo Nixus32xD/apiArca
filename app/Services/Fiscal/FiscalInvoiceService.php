@@ -22,6 +22,7 @@ class FiscalInvoiceService
         private readonly Wsfev1Client $wsfev1,
         private readonly FiscalWsfeRequestBuilder $requestBuilder,
         private readonly FiscalCaeaService $caeaService,
+        private readonly FiscalVoucherResolver $voucherResolver,
     ) {}
 
     /**
@@ -49,7 +50,7 @@ class FiscalInvoiceService
                 return $company->documents()->create([
                     'origin_type' => $normalized['origin']['type'],
                     'origin_id' => $normalized['origin']['id'],
-                    'document_type' => $payload['document_type'] ?? null,
+                    'document_type' => $normalized['document_type'],
                     'point_of_sale' => $normalized['point_of_sale'],
                     'voucher_type' => $normalized['voucher_type'],
                     'concept' => $normalized['concept'],
@@ -413,35 +414,23 @@ class FiscalInvoiceService
     private function normalizePayload(FiscalCompany $company, array $payload): array
     {
         $amounts = $payload['amounts'];
-        $customer = $payload['customer'] ?? [];
         $pointOfSale = $payload['point_of_sale'] ?? $company->default_point_of_sale;
-        $voucherType = $payload['cbte_type'] ?? $company->default_voucher_type;
         $concept = (int) ($payload['concept'] ?? config('fiscal.defaults.concept', 1));
+        $voucher = $this->voucherResolver->resolve($company, $payload);
 
         if (! $pointOfSale) {
             throw new FiscalException('Point of sale is required.', 422, 'point_of_sale_required');
         }
 
-        if (! $voucherType) {
-            throw new FiscalException('Voucher type is required.', 422, 'voucher_type_required');
-        }
-
-        $docType = $customer['doc_type'] ?? config('fiscal.defaults.consumer_final_doc_type', 99);
-        $docNumber = $customer['doc_number'] ?? config('fiscal.defaults.consumer_final_doc_number', 0);
-
         return [
             'origin' => $this->origin($payload),
+            'invoice_mode' => $voucher['invoice_mode'],
+            'document_type' => $voucher['document_type'],
             'point_of_sale' => (int) $pointOfSale,
-            'voucher_type' => (int) $voucherType,
+            'voucher_type' => (int) $voucher['voucher_type'],
             'concept' => $concept,
-            'customer' => [
-                'doc_type' => (int) $docType,
-                'doc_number' => (int) $docNumber,
-                'name' => $customer['name'] ?? null,
-                'tax_condition' => $customer['tax_condition'] ?? null,
-                'tax_condition_id' => $this->taxConditionId($customer, (int) $docType),
-                'email' => $customer['email'] ?? null,
-            ],
+            'issuer' => $voucher['issuer'],
+            'customer' => $voucher['customer'],
             'amounts' => [
                 'imp_total' => $this->decimal($amounts['imp_total']),
                 'imp_neto' => $this->decimal($amounts['imp_neto']),
@@ -482,6 +471,13 @@ class FiscalInvoiceService
      */
     private function origin(array $payload): array
     {
+        if (isset($payload['origin']) && is_array($payload['origin']) && ! empty($payload['origin']['type'])) {
+            return [
+                'type' => (string) $payload['origin']['type'],
+                'id' => isset($payload['origin']['id']) ? (string) $payload['origin']['id'] : null,
+            ];
+        }
+
         if (! empty($payload['origin_type'])) {
             return [
                 'type' => (string) $payload['origin_type'],
@@ -689,35 +685,5 @@ class FiscalInvoiceService
     private function decimal(mixed $value, int $scale = 2): string
     {
         return number_format((float) $value, $scale, '.', '');
-    }
-
-    /**
-     * @param  array<string, mixed>  $customer
-     */
-    private function taxConditionId(array $customer, int $docType): ?int
-    {
-        if (isset($customer['tax_condition_id'])) {
-            return (int) $customer['tax_condition_id'];
-        }
-
-        if (isset($customer['tax_condition']) && is_numeric($customer['tax_condition'])) {
-            return (int) $customer['tax_condition'];
-        }
-
-        if (isset($customer['tax_condition']) && is_string($customer['tax_condition'])) {
-            return match (strtolower($customer['tax_condition'])) {
-                'iva_responsable_inscripto', 'responsable_inscripto', 'ri' => 1,
-                'monotributo', 'monotributista' => 6,
-                'iva_exento', 'exento' => 4,
-                'consumidor_final', 'cf' => 5,
-                default => null,
-            };
-        }
-
-        if ($docType === (int) config('fiscal.defaults.consumer_final_doc_type', 99)) {
-            return (int) config('fiscal.defaults.consumer_final_tax_condition_id', 5);
-        }
-
-        return null;
     }
 }

@@ -173,6 +173,7 @@ Respuesta:
     "business_id": "tenant-123",
     "cuit": "20123456789",
     "legal_name": "Empresa Demo SA",
+    "fiscal_condition": "monotributo",
     "environment": "testing",
     "enabled": true,
     "defaults": {
@@ -258,14 +259,19 @@ Payload minimo:
 {
   "business_id": "tenant-123",
   "sale_id": "sale-1000",
-  "document_type": "invoice_b",
+  "origin": {
+    "type": "sale",
+    "id": "sale-1000"
+  },
+  "invoice_mode": "auto",
   "concept": 1,
-  "cbte_type": 6,
   "point_of_sale": 1,
   "customer": {
-    "doc_type": 99,
-    "doc_number": 0,
-    "name": "Consumidor Final"
+    "name": "Cliente SA",
+    "document_type": "CUIT",
+    "document_number": "30712345671",
+    "iva_condition": "responsable_inscripto",
+    "address": "Av. Fiscal 123"
   },
   "amounts": {
     "imp_total": 121,
@@ -287,10 +293,13 @@ Payload minimo:
 Campos importantes:
 
 - `business_id` o `external_business_id`: identifica la empresa fiscal.
-- `sale_id` o `payment_id`: define el origen del comprobante. Si no se envia, el origen queda como `manual`.
+- `origin.type` y `origin.id`: definen el origen del comprobante. `origin_type`/`origin_id`, `sale_id` y `payment_id` quedan como compatibilidad.
+- `invoice_mode=auto`: la API resuelve Factura A/B/C segun emisor y receptor.
 - `idempotency_key`: evita emitir dos veces el mismo comprobante.
-- `point_of_sale` y `cbte_type`: pueden venir en el payload o tomarse de los defaults de la empresa.
+- `point_of_sale`: puede venir en el payload o tomarse del default de la empresa.
 - `customer`: es opcional. Si falta, se usa consumidor final (`DocTipo=99`, `DocNro=0`).
+- `customer.document_type`: `CUIT`, `DNI` o `CONSUMIDOR_FINAL`.
+- `customer.iva_condition`: `responsable_inscripto`, `monotributo`, `consumidor_final` o `exento`.
 - `amounts.iva_items`: es opcional. Si no se envia y `imp_iva` es mayor a cero, se genera una alicuota por defecto con `FISCAL_DEFAULT_IVA_ID`.
 
 Respuesta de ejemplo:
@@ -304,6 +313,7 @@ Respuesta de ejemplo:
       "id": 1,
       "cuit": "20123456789",
       "legal_name": "Empresa Demo SA",
+      "fiscal_condition": "responsable_inscripto",
       "environment": "testing"
     },
     "origin": {

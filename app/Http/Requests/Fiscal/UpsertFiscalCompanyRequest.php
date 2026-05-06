@@ -20,6 +20,7 @@ class UpsertFiscalCompanyRequest extends FormRequest
             'external_business_id' => ['required', 'string', 'max:120'],
             'cuit' => ['required', 'digits:11'],
             'legal_name' => ['required', 'string', 'max:255'],
+            'fiscal_condition' => ['nullable', 'string', 'in:monotributo,responsable_inscripto,exento'],
             'environment' => ['required', 'string', 'in:testing,production'],
             'default_point_of_sale' => ['nullable', 'integer', 'min:1', 'max:99998'],
             'default_voucher_type' => ['nullable', 'integer', 'min:1'],

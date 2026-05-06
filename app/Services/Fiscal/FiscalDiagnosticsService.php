@@ -102,9 +102,18 @@ class FiscalDiagnosticsService
             ];
         }
 
+        if (! in_array($company->fiscal_condition, ['monotributo', 'responsable_inscripto', 'exento'], true)) {
+            return [
+                'ok' => false,
+                'message' => 'La condicion fiscal del emisor no esta configurada.',
+                'error_code' => 'company_fiscal_condition_invalid',
+            ];
+        }
+
         return $this->okCheck('Empresa fiscal habilitada y CUIT con formato válido.', [
             'cuit' => $company->cuit,
             'legal_name' => $company->legal_name,
+            'fiscal_condition' => $company->fiscal_condition,
         ]);
     }
 

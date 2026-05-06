@@ -12,6 +12,7 @@ class FiscalCompany extends Model
         'external_business_id',
         'cuit',
         'legal_name',
+        'fiscal_condition',
         'environment',
         'default_point_of_sale',
         'default_voucher_type',

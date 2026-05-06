@@ -10,8 +10,9 @@ certificados ni claves privadas: solo llama a esta API por HTTP.
   consistente por tenant.
 - El ambiente fiscal (`testing` o `production`) se configura por empresa fiscal
   en la API y se sincroniza desde el SaaS como dato de tenant.
-- Punto de venta y tipo de comprobante se versionan por empresa/ambiente en el
-  SaaS y se validan antes de emitir.
+- Punto de venta, CUIT y condicion fiscal del emisor se sincronizan por empresa.
+- El tipo de comprobante A/B/C se resuelve en la API con `invoice_mode=auto`.
+  El SaaS no debe enviar `cbte_type` en ventas comunes.
 
 ## 2) Onboarding de certificados
 
@@ -31,6 +32,8 @@ certificados ni claves privadas: solo llama a esta API por HTTP.
 ## 3) Flujo de emision
 
 - El SaaS emite mediante `POST /api/fiscal/documents`.
+- Debe enviar `invoice_mode=auto`; si no envia datos fiscales del cliente, la
+  API usa consumidor final sin identificar.
 - Debe enviar `idempotency_key` estable por operacion comercial.
 - Debe enviar `origin_type` y `origin_id` para poder recuperar documentos con
   `GET /api/fiscal/documents/by-origin`.

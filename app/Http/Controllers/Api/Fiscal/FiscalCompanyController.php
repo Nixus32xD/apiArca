@@ -217,6 +217,7 @@ class FiscalCompanyController extends Controller
                     'business_id' => $fiscalCompany->external_business_id,
                     'cuit' => $fiscalCompany->cuit,
                     'legal_name' => $fiscalCompany->legal_name,
+                    'fiscal_condition' => $fiscalCompany->fiscal_condition,
                     'environment' => $fiscalCompany->environment,
                     'enabled' => $fiscalCompany->enabled,
                     'ready' => $ready,
@@ -406,6 +407,7 @@ class FiscalCompanyController extends Controller
             'business_id' => $company->external_business_id,
             'cuit' => $company->cuit,
             'legal_name' => $company->legal_name,
+            'fiscal_condition' => $company->fiscal_condition,
             'environment' => $company->environment,
             'enabled' => $company->enabled,
             'defaults' => [

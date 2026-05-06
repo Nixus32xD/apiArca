@@ -165,6 +165,145 @@ it('issues a fiscal document and persists CAE without requiring customer email',
         ->and($document->normalized_payload['customer']['doc_number'])->toBe(0);
 });
 
+it('resolves monotributista issuer and consumer final receiver as factura c', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'monotributo',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload($company->external_business_id, idempotencyKey: 'auto-mono-cf'))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 11)
+        ->assertJsonPath('data.document_type', 'invoice_c');
+
+    expect(FiscalDocument::query()->firstOrFail()->normalized_payload['customer']['doc_type'])->toBe(99);
+});
+
+it('resolves monotributista issuer and RI receiver as factura c', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'monotributo',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload(
+            $company->external_business_id,
+            fiscalReceiver('responsable_inscripto'),
+            'auto-mono-ri'
+        ))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 11)
+        ->assertJsonPath('data.document_type', 'invoice_c');
+});
+
+it('resolves exento issuer and consumer final receiver as factura c', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'exento',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload($company->external_business_id, idempotencyKey: 'auto-exento-cf'))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 11)
+        ->assertJsonPath('data.document_type', 'invoice_c');
+});
+
+it('resolves RI issuer and consumer final receiver as factura b', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload($company->external_business_id, idempotencyKey: 'auto-ri-cf'))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 6)
+        ->assertJsonPath('data.document_type', 'invoice_b');
+});
+
+it('resolves RI issuer and monotributista receiver as factura b', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload(
+            $company->external_business_id,
+            fiscalReceiver('monotributo'),
+            'auto-ri-mono'
+        ))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 6)
+        ->assertJsonPath('data.document_type', 'invoice_b');
+});
+
+it('resolves RI issuer and exento receiver as factura b', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload(
+            $company->external_business_id,
+            fiscalReceiver('exento'),
+            'auto-ri-exento'
+        ))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 6)
+        ->assertJsonPath('data.document_type', 'invoice_b');
+});
+
+it('resolves RI issuer and RI receiver as factura a', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload(
+            $company->external_business_id,
+            fiscalReceiver('responsable_inscripto'),
+            'auto-ri-ri'
+        ))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 1)
+        ->assertJsonPath('data.document_type', 'invoice_a');
+});
+
+it('rejects factura a without receiver CUIT', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload(
+            $company->external_business_id,
+            [
+                'name' => 'Empresa sin CUIT',
+                'document_type' => 'DNI',
+                'document_number' => '12345678',
+                'iva_condition' => 'responsable_inscripto',
+            ],
+            'auto-a-without-cuit',
+            ['cbte_type' => 1, 'invoice_mode' => 'manual']
+        ))
+        ->assertStatus(422)
+        ->assertJsonPath('error_code', 'receiver_cuit_required');
+});
+
 it('stores the explicit SaaS origin and finds documents by origin', function (): void {
     $company = fiscalCompanyWithTicket();
     $payload = array_merge(fiscalPayload($company->external_business_id), [
@@ -509,16 +648,18 @@ it('rejects an ARCA certificate that does not match the generated private key', 
         ->and($credential->active)->toBeFalse();
 });
 
-function fiscalCompanyWithTicket(): FiscalCompany
+function fiscalCompanyWithTicket(array $overrides = []): FiscalCompany
 {
     $company = FiscalCompany::query()->create([
         'external_business_id' => 'business-1',
         'cuit' => '20123456789',
         'legal_name' => 'Empresa Demo SA',
+        'fiscal_condition' => 'monotributo',
         'environment' => 'testing',
         'default_point_of_sale' => 1,
-        'default_voucher_type' => 6,
+        'default_voucher_type' => 11,
         'enabled' => true,
+        ...$overrides,
     ]);
 
     FiscalCredential::query()->create([
@@ -547,9 +688,10 @@ function fiscalCompanyForCredentialOnboarding(string $businessId = 'business-csr
         'external_business_id' => $businessId,
         'cuit' => '20123456789',
         'legal_name' => 'Empresa Demo SA',
+        'fiscal_condition' => 'monotributo',
         'environment' => 'testing',
         'default_point_of_sale' => 1,
-        'default_voucher_type' => 6,
+        'default_voucher_type' => 11,
         'enabled' => true,
     ]);
 }
@@ -628,7 +770,7 @@ function fiscalPayload(string $businessId): array
     return [
         'business_id' => $businessId,
         'sale_id' => 'sale-100',
-        'document_type' => 'invoice_b',
+        'document_type' => 'invoice_c',
         'concept' => 1,
         'amounts' => [
             'imp_total' => 121,
@@ -644,5 +786,41 @@ function fiscalPayload(string $businessId): array
         'metadata' => [
             'source' => 'tests',
         ],
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function fiscalAutoPayload(
+    string $businessId,
+    array $customer = [],
+    string $idempotencyKey = 'idem-auto',
+    array $extra = [],
+): array {
+    return [
+        ...fiscalPayload($businessId),
+        'invoice_mode' => 'auto',
+        'origin' => [
+            'type' => 'sale',
+            'id' => 'sale-auto',
+        ],
+        'idempotency_key' => $idempotencyKey,
+        'customer' => $customer,
+        ...$extra,
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function fiscalReceiver(string $ivaCondition): array
+{
+    return [
+        'name' => 'Cliente Fiscal',
+        'document_type' => 'CUIT',
+        'document_number' => '30712345671',
+        'iva_condition' => $ivaCondition,
+        'address' => 'Av. Siempre Viva 123',
     ];
 }

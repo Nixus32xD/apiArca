@@ -19,6 +19,7 @@ class FiscalDocumentResource extends JsonResource
                 'id' => $this->company?->id,
                 'cuit' => $this->company?->cuit,
                 'legal_name' => $this->company?->legal_name,
+                'fiscal_condition' => $this->company?->fiscal_condition,
                 'environment' => $this->company?->environment,
             ],
             'origin' => [
