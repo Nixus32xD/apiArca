@@ -52,32 +52,115 @@ estar definido `OPENSSL_CONF` a nivel de proceso antes de iniciar PHP.
 
 ## Endpoints
 
-```text
-POST /api/fiscal/companies
-PUT /api/fiscal/companies/{company}
-POST /api/fiscal/companies/{company}/credentials/csr
-PUT /api/fiscal/companies/{company}/credentials
-PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate
-GET /api/fiscal/companies/{company}/activities
-GET /api/fiscal/companies/{company}/points-of-sale
-GET /api/fiscal/companies/{company}/status
-GET /api/fiscal/companies/{company}/diagnostics
-POST /api/fiscal/companies/{company}/credentials/test
+Todas las rutas bajo `/api/fiscal/*` requieren `Authorization: Bearer <token>`
+y pasan por auditoria en `fiscal_api_logs`. `{company}` puede ser
+`external_business_id` o el id interno numerico.
 
-POST /api/fiscal/documents
-GET /api/fiscal/documents/{id}
-GET /api/fiscal/documents/by-origin
-POST /api/fiscal/documents/{id}/retry
-POST /api/fiscal/documents/{id}/reconcile
-POST /api/fiscal/documents/{id}/caea/report
+### Admin fiscal
 
-POST /api/fiscal/companies/{company}/caea/request
-GET /api/fiscal/companies/{company}/caea/consult
-POST /api/fiscal/companies/{company}/caea/without-movement
-GET /api/fiscal/companies/{company}/caea/without-movement
-```
+- `GET /api/admin/`: renderiza una vista HTML operativa para soporte y
+  administracion fiscal. Permite filtrar por empresa y fechas, revisar estado
+  local, credenciales/tickets, IVA ventas/compras, saldo IVA estimado, IVA por
+  alicuota, medios de pago, ultimos comprobantes, compras recientes, errores y
+  accesos directos a endpoints JSON. En `local` y `testing` queda abierto; en
+  otros ambientes requiere `FISCAL_ADMIN_ENABLED=true` y `FISCAL_ADMIN_TOKEN`.
 
-`{company}` puede ser `external_business_id` o el id interno numerico.
+### Empresas fiscales
+
+- `POST /api/fiscal/companies`: crea o actualiza una empresa fiscal usando
+  `business_id`/`external_business_id`, CUIT, razon social, condicion fiscal,
+  ambiente, punto de venta default y tipo de comprobante default.
+- `PUT /api/fiscal/companies/{company}`: actualiza una empresa existente. Se usa
+  cuando el SaaS ya conoce el identificador interno o externo de la empresa.
+- `GET /api/fiscal/companies/{company}/status`: devuelve un resumen para el
+  dashboard del SaaS: empresa, habilitacion, defaults, credencial activa,
+  vencimiento de certificado, ticket WSAA cacheado y metadata operativa.
+- `GET /api/fiscal/companies/{company}/diagnostics`: ejecuta diagnosticos
+  operativos: empresa, credencial, certificado, WSAA, FEDummy y WSFEv1. Sirve
+  para soporte tecnico antes de emitir.
+- `GET /api/fiscal/companies/{company}/activities`: consulta en ARCA/WSFEv1 las
+  actividades fiscales habilitadas del emisor.
+- `GET /api/fiscal/companies/{company}/points-of-sale`: consulta en ARCA/WSFEv1
+  los puntos de venta habilitados del emisor.
+
+### Credenciales ARCA
+
+- `POST /api/fiscal/companies/{company}/credentials/csr`: genera una clave
+  privada cifrada y un CSR para cargar en ARCA. La credencial queda inactiva
+  hasta recibir el certificado `.crt`.
+- `PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate`:
+  recibe el certificado devuelto por ARCA, valida que corresponda a la clave
+  privada generada por el CSR y activa la credencial si matchea.
+- `PUT /api/fiscal/companies/{company}/credentials`: guarda manualmente una
+  credencial completa. Es una ruta administrativa interna; para SaaS conviene
+  usar el flujo CSR + certificate para no exponer claves privadas.
+- `POST /api/fiscal/companies/{company}/credentials/test`: prueba credenciales
+  contra ARCA. Es una operacion interna para soporte, no un flujo de usuario
+  final.
+
+### Emision y consulta de comprobantes
+
+- `POST /api/fiscal/documents`: emite un comprobante fiscal. Resuelve empresa,
+  tipo de comprobante A/B/C, factura/nota de credito/nota de debito, valida
+  importes, IVA por alicuota, medios de pago y comprobantes asociados. Llama a
+  WSFEv1 o usa CAEA, persiste request normalizado, request ARCA, response, CAE,
+  vencimiento, intentos, eventos y errores.
+- `GET /api/fiscal/documents/{id}`: devuelve el detalle local de un comprobante:
+  empresa, cliente, importes, IVA discriminado, CAE/CAEA, estado, intentos,
+  eventos, request/response y observaciones.
+- `GET /api/fiscal/documents/by-origin`: busca comprobantes por origen del SaaS,
+  por ejemplo `origin_type=appointment` y `origin_id=<id del turno>`. Sirve para
+  evitar duplicados y reconstruir el estado fiscal de una operacion comercial.
+- `GET /api/fiscal/documents/iva-sales`: devuelve el Libro IVA Ventas por empresa
+  y rango de fechas, con totales firmados, detalle por comprobante e IVA por
+  alicuota. El frontend no debe recalcular estos importes.
+- `POST /api/fiscal/documents/{id}/retry`: reintenta una emision fallida o
+  incierta. Si el comprobante ya tenia numero asignado, primero concilia contra
+  ARCA para evitar duplicar comprobantes.
+- `POST /api/fiscal/documents/{id}/reconcile`: consulta ARCA para actualizar el
+  estado local de un comprobante con numero asignado cuando hubo timeout o
+  respuesta incierta.
+- `POST /api/fiscal/documents/{id}/caea/report`: informa a ARCA un comprobante
+  emitido con CAEA que quedo pendiente de reporte informativo.
+
+### IVA Compras
+
+- `GET /api/fiscal/purchases`: lista comprobantes de proveedores cargados
+  manualmente. Permite filtrar por empresa y fechas.
+- `POST /api/fiscal/purchases`: crea un comprobante de proveedor para computar
+  IVA Compras. Guarda CUIT proveedor, tipo y numero de comprobante, fecha, neto,
+  IVA por alicuota, total, tributos, moneda, medio de pago y comprobantes
+  asociados si aplica.
+- `GET /api/fiscal/purchases/{id}`: consulta una compra con su detalle de IVA.
+- `PUT /api/fiscal/purchases/{id}`: actualiza una compra y reemplaza su detalle
+  de IVA por alicuota.
+- `DELETE /api/fiscal/purchases/{id}`: elimina una compra manual y sus items de
+  IVA asociados.
+- `GET /api/fiscal/purchases/iva-book`: devuelve el Libro IVA Compras por empresa
+  y rango de fechas, con totales e IVA por alicuota.
+
+### CAEA
+
+- `POST /api/fiscal/companies/{company}/caea/request`: solicita un CAEA para un
+  periodo/quincena y lo guarda localmente para usarlo en contingencia.
+- `GET /api/fiscal/companies/{company}/caea/consult`: consulta en ARCA un CAEA
+  existente para periodo/quincena.
+- `POST /api/fiscal/companies/{company}/caea/without-movement`: informa a ARCA
+  que un periodo CAEA no tuvo movimiento.
+- `GET /api/fiscal/companies/{company}/caea/without-movement`: consulta si el
+  periodo CAEA sin movimiento fue informado correctamente.
+
+### Rutas web locales
+
+Estas rutas estan en `routes/web.php`, responden 404 fuera de `local` y son solo
+para debugging manual:
+
+- `GET /`: pantalla default de Laravel.
+- `GET /fiscal/companies/{company}/status`: diagnostico local rapido de empresa,
+  credencial y access ticket.
+- `GET /fiscal/documents`: listado local de los ultimos comprobantes fiscales.
+- `GET /fiscal/documents/{document}`: detalle local completo de un comprobante,
+  con intentos, eventos y payloads.
 
 Los endpoints de credenciales quedan dentro de la API fiscal. El SaaS comercial
 puede invocar `credentials/csr` y `credentials/{credential}/certificate`
@@ -168,6 +251,14 @@ Con `invoice_mode=auto`, la API resuelve `cbte_type` segun la condicion fiscal d
 - emisor `responsable_inscripto` + receptor `responsable_inscripto`: Factura A (`cbte_type=1`);
 - emisor `responsable_inscripto` + receptor no RI: Factura B (`cbte_type=6`).
 
+`document_kind` permite emitir tambien notas:
+
+- `invoice`: Facturas A/B/C (`1`, `6`, `11`);
+- `debit_note`: Notas de Debito A/B/C (`2`, `7`, `12`);
+- `credit_note`: Notas de Credito A/B/C (`3`, `8`, `13`).
+
+Para notas de credito/debito se debe enviar `associated_vouchers` con al menos un comprobante asociado.
+
 El payload legacy con `origin_type`, `origin_id`, `document_type`, `cbte_type`, `customer.doc_type`, `customer.doc_number` y `customer.tax_condition_id` se mantiene por compatibilidad, pero el SaaS comercial debe preferir `invoice_mode=auto`.
 
 `origin_type` y `origin_id` identifican la operacion comercial estable del SaaS
@@ -185,6 +276,55 @@ Los puntos de venta habilitados para emision via WSFEv1 se consultan con `GET /a
 La respuesta de `points-of-sale` queda normalizada para el SaaS en
 `data.points_of_sale[]` con `id`, `number`, `type`, `emission_type`,
 `blocked` y `disabled_at`.
+
+## IVA y medios de pago
+
+Para empresas Responsable Inscripto, la API valida que:
+
+- `ImpTotal` cierre con neto gravado, no gravado, exento, tributos e IVA;
+- `ImpIVA` cierre con la suma de `amounts.iva_items`;
+- la suma de bases de `amounts.iva_items` cierre con `ImpNeto`;
+- el importe de cada alicuota corresponda a su ID ARCA: 21%, 10.5%, 27%, 5%, 2.5% o 0%.
+
+En comprobantes C no se informa IVA. Si llega un payload legacy con IVA, la API lo absorbe al subtotal sin discriminarlo para evitar rechazos de ARCA.
+
+Los medios de pago (`cash`, `bank_transfer`, `debit_card`, `credit_card`, `other`) se guardan como dato operativo/auditoria. WSFEv1 no los usa para resolver el tipo de comprobante A/B/C ni para calcular IVA.
+
+## IVA Compras
+
+La API permite cargar comprobantes de proveedores manualmente:
+
+```json
+{
+  "business_id": "tenant-123",
+  "voucher_date": "2026-04-10",
+  "cbte_type": 1,
+  "point_of_sale": 2,
+  "document_number": 123,
+  "supplier": {
+    "cuit": "30712345671",
+    "name": "Proveedor SA",
+    "iva_condition": "responsable_inscripto"
+  },
+  "amounts": {
+    "imp_total": 121,
+    "imp_neto": 100,
+    "imp_iva": 21,
+    "iva_items": [
+      { "id": 5, "base_imp": 100, "importe": 21 }
+    ]
+  }
+}
+```
+
+Libros IVA:
+
+```text
+GET /api/fiscal/documents/iva-sales?business_id=tenant-123&date_from=2026-04-01&date_to=2026-04-30
+GET /api/fiscal/purchases/iva-book?business_id=tenant-123&date_from=2026-04-01&date_to=2026-04-30
+```
+
+Las notas de credito se informan con signo negativo en los libros; facturas y notas de debito con signo positivo.
 
 ## Estado fiscal para el SaaS
 
@@ -302,6 +442,9 @@ php artisan schedule:run
 - `fiscal_credentials`: certificado, clave privada, passphrase, CSR, key name y estado de onboarding.
 - `access_tickets`: Token + Sign cifrados, generacion, vencimiento y reutilizaciones.
 - `fiscal_documents`: documento fiscal, origen, numeracion, autorizacion CAE/CAEA, estado, payloads y errores.
+- `fiscal_document_iva_items`: IVA ventas discriminado por alicuota.
+- `fiscal_purchases`: comprobantes de proveedores para IVA Compras.
+- `fiscal_purchase_iva_items`: IVA compras discriminado por alicuota.
 - `fiscal_document_attempts`: intentos por operacion, duracion, request/response y error.
 - `fiscal_document_events`: eventos de trazabilidad del documento.
 - `fiscal_api_logs`: auditoria inbound/outbound con payloads resumidos y sanitizados.
@@ -337,6 +480,5 @@ Ademas, `fiscal_status` normaliza estados para integraciones nuevas:
 
 - Habilitar `pdo_sqlite` o configurar una base de test dedicada para ejecutar los tests de feature completos.
 - Validar con certificados reales de homologacion antes de pasar a produccion.
-- Ajustar reglas de IVA por tipo de comprobante/condicion fiscal si el SaaS no envia `amounts.iva_items`.
 - Agregar endpoints administrativos mas finos si se necesita separar permisos de onboarding y emision.
 - Implementar colas para emision asincronica si el SaaS no debe esperar llamadas a ARCA.

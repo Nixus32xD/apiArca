@@ -17,6 +17,22 @@ class FiscalDocument extends Model
         'voucher_type',
         'concept',
         'document_number',
+        'voucher_date',
+        'customer_doc_type',
+        'customer_doc_number',
+        'customer_name',
+        'customer_iva_condition',
+        'customer_tax_condition_id',
+        'imp_total',
+        'imp_neto',
+        'imp_iva',
+        'imp_trib',
+        'imp_op_ex',
+        'imp_tot_conc',
+        'payment_method',
+        'payment_reference',
+        'payment_amount',
+        'paid_at',
         'status',
         'authorization_type',
         'authorization_code',
@@ -50,6 +66,17 @@ class FiscalDocument extends Model
             'voucher_type' => 'integer',
             'concept' => 'integer',
             'document_number' => 'integer',
+            'voucher_date' => 'date',
+            'customer_doc_type' => 'integer',
+            'customer_tax_condition_id' => 'integer',
+            'imp_total' => 'decimal:2',
+            'imp_neto' => 'decimal:2',
+            'imp_iva' => 'decimal:2',
+            'imp_trib' => 'decimal:2',
+            'imp_op_ex' => 'decimal:2',
+            'imp_tot_conc' => 'decimal:2',
+            'payment_amount' => 'decimal:2',
+            'paid_at' => 'datetime',
             'authorization_expires_at' => 'date',
             'cae_expires_at' => 'date',
             'caea_order' => 'integer',
@@ -81,5 +108,10 @@ class FiscalDocument extends Model
     public function events(): HasMany
     {
         return $this->hasMany(FiscalDocumentEvent::class);
+    }
+
+    public function ivaItems(): HasMany
+    {
+        return $this->hasMany(FiscalDocumentIvaItem::class);
     }
 }

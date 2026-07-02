@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\Fiscal;
 use App\Exceptions\Fiscal\FiscalException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Fiscal\ByOriginFiscalDocumentRequest;
+use App\Http\Requests\Fiscal\FiscalIvaBookRequest;
 use App\Http\Requests\Fiscal\StoreFiscalDocumentRequest;
 use App\Http\Resources\FiscalDocumentResource;
 use App\Models\FiscalDocument;
 use App\Services\Fiscal\FiscalCompanyResolver;
+use App\Services\Fiscal\FiscalIvaBookService;
 use App\Services\Fiscal\FiscalInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,13 +22,14 @@ class FiscalDocumentController extends Controller
     public function __construct(
         private readonly FiscalInvoiceService $invoiceService,
         private readonly FiscalCompanyResolver $companyResolver,
+        private readonly FiscalIvaBookService $ivaBookService,
     ) {}
 
     public function store(StoreFiscalDocumentRequest $request): JsonResponse
     {
         try {
             $result = $this->invoiceService->issue($request->validated(), $this->traceId($request));
-            $resource = new FiscalDocumentResource($result['document']->load(['company', 'attempts', 'events']));
+            $resource = new FiscalDocumentResource($result['document']->load(['company', 'ivaItems', 'attempts', 'events']));
 
             return $resource
                 ->additional(['meta' => ['idempotent_replay' => $result['idempotent_replay']]])
@@ -41,7 +44,7 @@ class FiscalDocumentController extends Controller
 
     public function show(FiscalDocument $document): FiscalDocumentResource
     {
-        return new FiscalDocumentResource($document->load(['company', 'attempts', 'events']));
+        return new FiscalDocumentResource($document->load(['company', 'ivaItems', 'attempts', 'events']));
     }
 
     public function byOrigin(ByOriginFiscalDocumentRequest $request): AnonymousResourceCollection|JsonResponse
@@ -49,7 +52,7 @@ class FiscalDocumentController extends Controller
         try {
             $company = $this->companyResolver->fromPayload($request->validated());
             $query = $company->documents()
-                ->with('company')
+                ->with(['company', 'ivaItems'])
                 ->where('origin_type', $request->validated('origin_type'))
                 ->latest();
 
@@ -63,11 +66,28 @@ class FiscalDocumentController extends Controller
         }
     }
 
+    public function ivaSales(FiscalIvaBookRequest $request): JsonResponse
+    {
+        try {
+            $company = $this->companyResolver->fromPayload($request->validated());
+
+            return response()->json([
+                'data' => $this->ivaBookService->sales(
+                    $company,
+                    $request->validated('date_from'),
+                    $request->validated('date_to'),
+                ),
+            ]);
+        } catch (FiscalException $exception) {
+            return $this->fiscalError($exception);
+        }
+    }
+
     public function retry(Request $request, FiscalDocument $document): JsonResponse
     {
         try {
             $result = $this->invoiceService->retry($document, $this->traceId($request));
-            $resource = new FiscalDocumentResource($result['document']->load(['company', 'attempts', 'events']));
+            $resource = new FiscalDocumentResource($result['document']->load(['company', 'ivaItems', 'attempts', 'events']));
 
             return $resource
                 ->additional(['meta' => ['reconciled_before_retry' => $result['reconciled_before_retry']]])
@@ -83,7 +103,7 @@ class FiscalDocumentController extends Controller
     {
         try {
             $resource = new FiscalDocumentResource(
-                $this->invoiceService->reconcile($document, $this->traceId($request))->load(['company', 'attempts', 'events'])
+                $this->invoiceService->reconcile($document, $this->traceId($request))->load(['company', 'ivaItems', 'attempts', 'events'])
             );
 
             return $resource->response();

@@ -18,6 +18,9 @@ La referencia extendida esta en [docs/fiscal-api.md](docs/fiscal-api.md).
 - Carga de certificados y claves privadas, o generacion de CSR para que el SaaS no custodie claves privadas.
 - Cache de tickets WSAA por empresa y servicio.
 - Emision de comprobantes CAE por WSFEv1.
+- Facturas, notas de credito y notas de debito A/B/C.
+- Exposicion de importes e IVA por alicuota para Libro IVA Ventas.
+- Carga manual de comprobantes de proveedores para Libro IVA Compras.
 - Consulta de actividades, puntos de venta, estado y diagnostico fiscal.
 - Reintento seguro y conciliacion de comprobantes con estado incierto.
 - Auditoria inbound/outbound con payloads resumidos y sanitizados.
@@ -70,6 +73,8 @@ FISCAL_CONSUMER_FINAL_DOC_TYPE=99
 FISCAL_CONSUMER_FINAL_DOC_NUMBER=0
 FISCAL_CONSUMER_FINAL_TAX_CONDITION_ID=5
 FISCAL_DEFAULT_IVA_ID=5
+FISCAL_ADMIN_ENABLED=false
+FISCAL_ADMIN_TOKEN=
 ```
 
 `APP_KEY` es importante porque Laravel lo usa para cifrar certificados, claves privadas, passphrases, tokens y signs guardados en base de datos.
@@ -134,10 +139,24 @@ Authorization: Bearer token-largo-random
 | `GET` | `/api/fiscal/companies/{company}/diagnostics` | Ejecutar diagnosticos de empresa, certificado, WSAA y WSFEv1. |
 | `POST` | `/api/fiscal/companies/{company}/credentials/test` | Validar credenciales contra WSAA y `FEDummy`. |
 | `POST` | `/api/fiscal/documents` | Emitir comprobante fiscal. |
+| `GET` | `/api/fiscal/documents/iva-sales` | Libro IVA Ventas por empresa y periodo. |
 | `GET` | `/api/fiscal/documents/{document}` | Obtener un comprobante por id interno. |
 | `GET` | `/api/fiscal/documents/by-origin` | Buscar comprobantes por origen (`sale`, `payment`, `manual`). |
 | `POST` | `/api/fiscal/documents/{document}/retry` | Reintentar emision de forma segura. |
 | `POST` | `/api/fiscal/documents/{document}/reconcile` | Conciliar el comprobante contra ARCA. |
+| `GET` | `/api/fiscal/purchases` | Listar comprobantes de proveedores. |
+| `POST` | `/api/fiscal/purchases` | Cargar comprobante de proveedor. |
+| `GET` | `/api/fiscal/purchases/iva-book` | Libro IVA Compras por empresa y periodo. |
+| `PUT` | `/api/fiscal/purchases/{purchase}` | Actualizar comprobante de proveedor. |
+| `DELETE` | `/api/fiscal/purchases/{purchase}` | Eliminar comprobante de proveedor. |
+
+Vista operativa local:
+
+```text
+GET /api/admin/
+```
+
+En `local`/`testing` abre sin token. Fuera de local requiere `FISCAL_ADMIN_ENABLED=true` y `FISCAL_ADMIN_TOKEN`.
 
 `{company}` puede ser el `external_business_id` o el id numerico interno de la empresa.
 
@@ -295,12 +314,16 @@ Campos importantes:
 - `business_id` o `external_business_id`: identifica la empresa fiscal.
 - `origin.type` y `origin.id`: definen el origen del comprobante. `origin_type`/`origin_id`, `sale_id` y `payment_id` quedan como compatibilidad.
 - `invoice_mode=auto`: la API resuelve Factura A/B/C segun emisor y receptor.
+- `document_kind`: opcional. Acepta `invoice`, `credit_note` o `debit_note`. Para notas se requiere `associated_vouchers`.
 - `idempotency_key`: evita emitir dos veces el mismo comprobante.
 - `point_of_sale`: puede venir en el payload o tomarse del default de la empresa.
 - `customer`: es opcional. Si falta, se usa consumidor final (`DocTipo=99`, `DocNro=0`).
 - `customer.document_type`: `CUIT`, `DNI` o `CONSUMIDOR_FINAL`.
 - `customer.iva_condition`: `responsable_inscripto`, `monotributo`, `consumidor_final` o `exento`.
 - `amounts.iva_items`: es opcional. Si no se envia y `imp_iva` es mayor a cero, se genera una alicuota por defecto con `FISCAL_DEFAULT_IVA_ID`.
+- Para emisores Responsable Inscripto, `amounts.iva_items` debe cerrar con `imp_neto` e `imp_iva`. Se soportan las alicuotas ARCA 21, 10.5, 27, 5, 2.5 y 0 por sus IDs oficiales.
+- Para comprobantes C no se informa IVA; si llega un payload legacy con IVA, la API lo absorbe al subtotal sin discriminarlo.
+- `payment_method` o `payment.method` acepta `cash`, `bank_transfer`, `debit_card`, `credit_card` u `other`. Este dato queda como auditoria operativa y no define el tipo de comprobante ARCA.
 
 Respuesta de ejemplo:
 
@@ -355,6 +378,51 @@ Authorization: Bearer token-largo-random
 ```
 
 `origin_type` acepta `sale`, `payment` o `manual`. La respuesta devuelve hasta 50 comprobantes ordenados por fecha descendente.
+
+## IVA Compras
+
+Carga manual de comprobante de proveedor:
+
+```http
+POST /api/fiscal/purchases
+Authorization: Bearer token-largo-random
+Content-Type: application/json
+```
+
+```json
+{
+  "business_id": "tenant-123",
+  "voucher_date": "2026-04-10",
+  "cbte_type": 1,
+  "point_of_sale": 2,
+  "document_number": 123,
+  "supplier": {
+    "cuit": "30712345671",
+    "name": "Proveedor SA",
+    "iva_condition": "responsable_inscripto"
+  },
+  "amounts": {
+    "imp_total": 121,
+    "imp_neto": 100,
+    "imp_iva": 21,
+    "iva_items": [
+      { "id": 5, "base_imp": 100, "importe": 21 }
+    ]
+  }
+}
+```
+
+Libro IVA Compras:
+
+```http
+GET /api/fiscal/purchases/iva-book?business_id=tenant-123&date_from=2026-04-01&date_to=2026-04-30
+```
+
+Libro IVA Ventas:
+
+```http
+GET /api/fiscal/documents/iva-sales?business_id=tenant-123&date_from=2026-04-01&date_to=2026-04-30
+```
 
 ## Reintentos y conciliacion
 
@@ -443,6 +511,9 @@ Codigos frecuentes:
 - `fiscal_credentials`: certificados, claves privadas, CSR, key name y estado.
 - `access_tickets`: token y sign WSAA cifrados.
 - `fiscal_documents`: comprobantes, numeracion, autorizacion, payloads y estado.
+- `fiscal_document_iva_items`: IVA discriminado por alicuota de ventas.
+- `fiscal_purchases`: comprobantes de proveedores para IVA Compras.
+- `fiscal_purchase_iva_items`: IVA discriminado por alicuota de compras.
 - `fiscal_document_attempts`: intentos de operaciones fiscales.
 - `fiscal_document_events`: eventos de trazabilidad.
 - `fiscal_api_logs`: auditoria inbound/outbound.

@@ -54,4 +54,9 @@ class FiscalCompany extends Model
     {
         return $this->hasMany(FiscalDocument::class);
     }
+
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(FiscalPurchase::class);
+    }
 }

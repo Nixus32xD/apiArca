@@ -281,6 +281,98 @@ it('resolves RI issuer and RI receiver as factura a', function (): void {
         ->assertJsonPath('data.document_type', 'invoice_a');
 });
 
+it('exposes normalized fiscal amounts and IVA aliquots through the API', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $payload = fiscalAutoPayload(
+        $company->external_business_id,
+        fiscalReceiver('responsable_inscripto'),
+        'auto-ri-multi-iva',
+        [
+            'amounts' => [
+                'imp_total' => 176.25,
+                'imp_neto' => 150,
+                'imp_iva' => 26.25,
+                'imp_trib' => 0,
+                'imp_op_ex' => 0,
+                'imp_tot_conc' => 0,
+                'iva_items' => [
+                    ['id' => 5, 'base_imp' => 100, 'importe' => 21],
+                    ['id' => 4, 'base_imp' => 50, 'importe' => 5.25],
+                ],
+            ],
+        ],
+    );
+
+    $response = $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.amounts.imp_total', '176.25')
+        ->assertJsonPath('data.amounts.imp_neto', '150.00')
+        ->assertJsonPath('data.amounts.imp_iva', '26.25');
+
+    expect(collect($response->json('data.amounts.iva_items'))->pluck('id')->sort()->values()->all())
+        ->toBe([4, 5]);
+
+    $documentId = $response->json('data.id');
+
+    $showResponse = $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/documents/{$documentId}")
+        ->assertOk()
+        ->assertJsonPath('data.customer.iva_condition', 'responsable_inscripto');
+
+    expect(collect($showResponse->json('data.amounts.iva_items'))->pluck('rate')->sort()->values()->all())
+        ->toBe(['10.50', '21.00']);
+});
+
+it('issues a credit note with the corresponding ARCA voucher type and associated voucher', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload(
+            $company->external_business_id,
+            fiscalReceiver('responsable_inscripto'),
+            'credit-note-a',
+            [
+                'document_kind' => 'credit_note',
+                'associated_vouchers' => [
+                    ['type' => 1, 'point_of_sale' => 1, 'number' => 10],
+                ],
+            ],
+        ))
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 3)
+        ->assertJsonPath('data.document_type', 'credit_note_a')
+        ->assertJsonPath('data.document_kind', 'credit_note');
+});
+
+it('rejects credit and debit notes without an associated voucher', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+        'default_voucher_type' => null,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalAutoPayload(
+            $company->external_business_id,
+            fiscalReceiver('responsable_inscripto'),
+            'credit-note-without-associated',
+            ['document_kind' => 'credit_note'],
+        ))
+        ->assertStatus(422)
+        ->assertJsonPath('error_code', 'associated_voucher_required');
+});
+
 it('rejects factura a without receiver CUIT', function (): void {
     $company = fiscalCompanyWithTicket([
         'fiscal_condition' => 'responsable_inscripto',
@@ -555,6 +647,62 @@ it('normalizes fiscal activities and points of sale for the SaaS', function (): 
         ->assertJsonPath('data.points_of_sale.0.type', 'CAE')
         ->assertJsonPath('data.points_of_sale.0.emission_type', 'CAE')
         ->assertJsonPath('data.points_of_sale.0.blocked', false);
+});
+
+it('stores supplier purchases and returns IVA compras totals', function (): void {
+    $company = fiscalCompanyWithTicket([
+        'fiscal_condition' => 'responsable_inscripto',
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/purchases', [
+            'business_id' => $company->external_business_id,
+            'voucher_date' => '2026-04-10',
+            'cbte_type' => 1,
+            'point_of_sale' => 2,
+            'document_number' => 123,
+            'supplier' => [
+                'cuit' => '30712345671',
+                'name' => 'Proveedor SA',
+                'iva_condition' => 'responsable_inscripto',
+            ],
+            'amounts' => [
+                'imp_total' => 121,
+                'imp_neto' => 100,
+                'imp_iva' => 21,
+                'imp_trib' => 0,
+                'imp_op_ex' => 0,
+                'imp_tot_conc' => 0,
+                'iva_items' => [
+                    ['id' => 5, 'base_imp' => 100, 'importe' => 21],
+                ],
+            ],
+            'payment_method' => 'transferencia',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.supplier.cuit', '30712345671')
+        ->assertJsonPath('data.payment.method', 'bank_transfer')
+        ->assertJsonPath('data.amounts.iva_items.0.rate', '21.00');
+
+    $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/purchases/iva-book?business_id={$company->external_business_id}&date_from=2026-04-01&date_to=2026-04-30")
+        ->assertOk()
+        ->assertJsonPath('data.totals.imp_total', '121.00')
+        ->assertJsonPath('data.totals.imp_iva', '21.00')
+        ->assertJsonPath('data.totals.iva_by_aliquot.0.id', 5);
+});
+
+it('renders the fiscal admin dashboard in testing', function (): void {
+    fiscalCompanyWithTicket();
+
+    $this
+        ->get('/api/admin/')
+        ->assertOk()
+        ->assertSee('Fiscal admin')
+        ->assertSee('IVA Ventas')
+        ->assertSee('IVA Compras');
 });
 
 it('generates a pending credential CSR and reuses the same key name', function (): void {

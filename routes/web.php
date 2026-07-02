@@ -4,10 +4,13 @@ use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use Illuminate\Support\Facades\Route;
 
+// Pantalla default de Laravel. No forma parte de la integracion fiscal.
 Route::get('/', function () {
     return view('welcome');
 });
 
+// Diagnostico local rapido de empresa fiscal, credencial y access ticket.
+// Disponible solo en ambiente local; en otros ambientes responde 404.
 Route::get('/fiscal/companies/{company}/status', function (string $company) {
     abort_unless(app()->environment('local'), 404);
 
@@ -52,6 +55,9 @@ Route::get('/fiscal/companies/{company}/status', function (string $company) {
     ]);
 });
 
+// Listado local de los ultimos comprobantes fiscales para debugging manual.
+// Disponible solo en ambiente local; la API oficial equivalente esta en
+// /api/fiscal/documents/{id} y requiere token interno.
 Route::get('/fiscal/documents', function () {
     abort_unless(app()->environment('local'), 404);
 
@@ -84,6 +90,9 @@ Route::get('/fiscal/documents', function () {
     return response()->json(['data' => $documents]);
 });
 
+// Detalle local completo de un comprobante, con intentos, eventos y payloads.
+// Disponible solo en ambiente local para investigar errores sin exponerlo en
+// produccion.
 Route::get('/fiscal/documents/{document}', function (FiscalDocument $document) {
     abort_unless(app()->environment('local'), 404);
 

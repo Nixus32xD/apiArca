@@ -1,0 +1,469 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [7 0 R 9 0 R 11 0 R 13 0 R 15 0 R 17 0 R 19 0 R] /Count 7 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+6 0 obj
+<< /Length 1882 >>
+stream
+q 1.000 1.000 1.000 rg 0.00 0.00 595.00 842.00 re f Q
+q 0.050 0.130 0.220 rg 0.00 650.00 595.00 192.00 re f Q
+q 0.000 0.550 0.540 rg 0.00 642.00 595.00 8.00 re f Q
+BT 0.650 0.920 0.900 rg /F2 13.00 Tf 48.00 760.00 Td (API ARCA/AFIP) Tj ET
+BT 1.000 1.000 1.000 rg /F2 24.00 Tf 48.00 716.00 Td (Guia ARCA: Testing y Produccion) Tj ET
+BT 0.830 0.900 0.940 rg /F1 11.20 Tf 48.00 650.00 Td (Pasos operativos para certificados, WSAA, WSFEv1 y puesta en marcha.) Tj ET
+BT 0.230 0.290 0.360 rg /F1 10.00 Tf 48.00 610.00 Td (Generado: 2026-07-01) Tj ET
+q 0.830 0.880 0.910 RG 1.00 w 48.00 590.00 m 547.00 590.00 l S Q
+q 0.000 0.550 0.540 rg 48.00 532.00 7.00 34.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 13.00 Tf 66.00 551.00 Td (Homologacion) Tj ET
+BT 0.230 0.290 0.360 rg /F1 9.20 Tf 66.00 535.00 Td (Alta de certificados, CUIT de prueba y validacion de emision.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 468.00 7.00 34.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 13.00 Tf 66.00 487.00 Td (Produccion) Tj ET
+BT 0.230 0.290 0.360 rg /F1 9.20 Tf 66.00 471.00 Td (Relaciones fiscales, certificados productivos y variables de entorno.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 404.00 7.00 34.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 13.00 Tf 66.00 423.00 Td (Endpoints) Tj ET
+BT 0.230 0.290 0.360 rg /F1 9.20 Tf 66.00 407.00 Td (URLs oficiales configuradas para WSAA y WSFEv1.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 340.00 7.00 34.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 13.00 Tf 66.00 359.00 Td (Checklist) Tj ET
+BT 0.230 0.290 0.360 rg /F1 9.20 Tf 66.00 343.00 Td (Controles previos antes de operar con contribuyentes reales.) Tj ET
+q 0.950 0.970 0.980 rg 48.00 92.00 499.00 72.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 10.50 Tf 66.00 136.00 Td (Alcance) Tj ET
+BT 0.230 0.290 0.360 rg /F1 8.70 Tf 66.00 116.00 Td (Documentacion operativa y tecnica para integracion SaaS, facturacion electronica, IVA y ambientes ARCA.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 1259 >>
+stream
+q 0.050 0.130 0.220 rg 0.00 798.00 595.00 44.00 re f Q
+q 0.000 0.550 0.540 rg 0.00 794.00 595.00 4.00 re f Q
+BT 1.000 1.000 1.000 rg /F2 9.50 Tf 48.00 813.00 Td (Guia ARCA: Testing y Produccion) Tj ET
+q 0.830 0.880 0.910 RG 0.70 w 48.00 42.00 m 547.00 42.00 l S Q
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 48.00 25.00 Td (API ARCA/AFIP - documentacion tecnica) Tj ET
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 505.00 25.00 Td (Pag. 2) Tj ET
+BT 0.030 0.310 0.520 rg /F2 21.00 Tf 48.00 768.00 Td (Indice) Tj ET
+q 0.000 0.550 0.540 RG 2.00 w 48.00 738.00 m 547.00 738.00 l S Q
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 714.00 Td (Fuentes oficiales revisadas) Tj ET
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 696.00 Td (Conceptos base) Tj ET
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 678.00 Td (Entorno testing / homologacion) Tj ET
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 660.00 Td (Entorno produccion) Tj ET
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 642.00 Td (Endpoints ARCA configurados en esta API) Tj ET
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 624.00 Td (Variables .env recomendadas) Tj ET
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 606.00 Td (Checklist previo a produccion) Tj ET
+BT 0.080 0.090 0.100 rg /F2 10.50 Tf 48.00 588.00 Td (Riesgos operativos) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 5349 >>
+stream
+q 0.050 0.130 0.220 rg 0.00 798.00 595.00 44.00 re f Q
+q 0.000 0.550 0.540 rg 0.00 794.00 595.00 4.00 re f Q
+BT 1.000 1.000 1.000 rg /F2 9.50 Tf 48.00 813.00 Td (Guia ARCA: Testing y Produccion) Tj ET
+q 0.830 0.880 0.910 RG 0.70 w 48.00 42.00 m 547.00 42.00 l S Q
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 48.00 25.00 Td (API ARCA/AFIP - documentacion tecnica) Tj ET
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 505.00 25.00 Td (Pag. 3) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 768.00 Td (Fecha: 2026-07-01) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 751.00 Td (Esta guia resume el alta operativa de ARCA/AFIP para usar esta API fiscal con WSAA y WSFEv1. No) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 738.00 Td (reemplaza la documentacion oficial ni la configuracion de Clave Fiscal del contribuyente.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 705.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 712.00 Td (Fuentes oficiales revisadas) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 677.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 677.00 Td (Documentacion Web Services SOAP ARCA:) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 661.00 Td (https://www.afip.gob.ar/ws/documentacion/) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 644.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 644.00 Td (Arquitectura general:) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 628.00 Td (https://www.afip.gob.ar/ws/documentacion/arquitectura-general.asp) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 611.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 611.00 Td (Certificados:) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 595.00 Td (https://www.afip.gob.ar/ws/documentacion/certificados.asp) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 578.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 578.00 Td (WSAA:) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 562.00 Td (https://www.afip.gob.ar/ws/documentacion/wsaa.asp) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 545.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 545.00 Td (WSFEv1 Factura Electronica:) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 529.00 Td (https://www.afip.gob.ar/ws/documentacion/ws-factura-electronica.asp) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 512.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 512.00 Td (Manual desarrollador WSFEv1 v4.4:) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 496.00 Td (https://www.afip.gob.ar/ws/documentacion/manuales/manual-desarrollador-ARCA-COMPG.pdf) Tj ET
+q 0.000 0.550 0.540 rg 48.00 463.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 470.00 Td (Conceptos base) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 435.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 435.00 Td (ARCA usa Web Services SOAP sobre HTTPS.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 419.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 419.00 Td (El acceso a los web services de negocio se autentica con WSAA.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 403.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 403.00 Td (WSAA devuelve Token y Sign para un servicio, por ejemplo wsfe.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 387.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 387.00 Td (Cada entorno usa certificados y endpoints distintos.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 371.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 371.00 Td (El Ticket de Acceso de WSAA es temporal; esta API lo cachea en) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 355.00 Td (access_tickets.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 322.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 329.00 Td (Entorno testing / homologacion) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 294.00 Td (Objetivo: emitir y validar comprobantes contra homologacion sin impacto fiscal real.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 277.00 Td (1. Crear o actualizar empresa fiscal en esta API.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 237.00 499.00 33.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 237.00 4.00 33.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 256.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 242.00 Td (POST /api/fiscal/companies) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 218.00 Td (Payload minimo:) Tj ET
+q 0.960 0.960 0.950 rg 48.00 90.00 499.00 121.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 90.00 4.00 121.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 197.00 Td (JSON) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 183.00 Td ({) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 172.00 Td (  "external_business_id": "tenant-demo",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 161.00 Td (  "cuit": "20123456789",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 150.00 Td (  "legal_name": "Empresa Demo SA",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 139.00 Td (  "fiscal_condition": "responsable_inscripto",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 128.00 Td (  "environment": "testing",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 117.00 Td (  "default_point_of_sale": 1,) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 106.00 Td (  "enabled": true) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 95.00 Td (}) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 5606 >>
+stream
+q 0.050 0.130 0.220 rg 0.00 798.00 595.00 44.00 re f Q
+q 0.000 0.550 0.540 rg 0.00 794.00 595.00 4.00 re f Q
+BT 1.000 1.000 1.000 rg /F2 9.50 Tf 48.00 813.00 Td (Guia ARCA: Testing y Produccion) Tj ET
+BT 0.780 0.860 0.910 rg /F1 8.20 Tf 327.00 813.00 Td (Entorno testing / homologacion) Tj ET
+q 0.830 0.880 0.910 RG 0.70 w 48.00 42.00 m 547.00 42.00 l S Q
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 48.00 25.00 Td (API ARCA/AFIP - documentacion tecnica) Tj ET
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 505.00 25.00 Td (Pag. 4) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 768.00 Td (2. Generar CSR desde esta API.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 728.00 499.00 33.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 728.00 4.00 33.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 747.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 733.00 Td (POST /api/fiscal/companies/{company}/credentials/csr) Tj ET
+q 0.960 0.960 0.950 rg 48.00 631.00 499.00 88.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 631.00 4.00 88.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 705.00 Td (JSON) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 691.00 Td ({) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 680.00 Td (  "key_name": "tenant-demo-testing.key",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 669.00 Td (  "common_name": "tenant-demo-testing",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 658.00 Td (  "organization_name": "Empresa Demo SA",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 647.00 Td (  "country_name": "AR") Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 636.00 Td (}) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 612.00 Td (La clave privada queda cifrada dentro de la API. El SaaS no debe guardarla.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 595.00 Td (3. Gestionar certificado de homologacion en ARCA.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 578.00 Td (Segun la documentacion oficial, para testing/homologacion se usa WSASS \(Autoservicio de Acceso a) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 565.00 Td (APIs de Homologacion\), solicitado desde el Administrador de Relaciones de Clave Fiscal con clave) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 552.00 Td (fiscal de una persona fisica.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 535.00 Td (Pasos operativos:) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 518.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 518.00 Td (Ingresar al Administrador de Relaciones de Clave Fiscal.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 502.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 502.00 Td (Adherir el servicio WSASS.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 486.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 486.00 Td (En WSASS cargar el CSR generado por la API.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 470.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 470.00 Td (Descargar el certificado de homologacion.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 454.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 454.00 Td (Asociar el certificado al web service de negocio wsfe.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 438.00 Td (4. Cargar certificado en esta API.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 398.00 499.00 33.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 398.00 4.00 33.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 417.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 403.00 Td (PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate) Tj ET
+q 0.960 0.960 0.950 rg 48.00 323.00 499.00 66.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 323.00 4.00 66.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 375.00 Td (JSON) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 361.00 Td ({) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 350.00 Td (  "certificate": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 339.00 Td (  "active": true) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 328.00 Td (}) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 304.00 Td (La API valida que el certificado corresponda a la clave privada generada.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 287.00 Td (5. Probar credenciales y punto de venta.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 203.00 499.00 77.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 203.00 4.00 77.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 266.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 252.00 Td (POST /api/fiscal/companies/{company}/credentials/test) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 241.00 Td (GET /api/fiscal/companies/{company}/status) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 230.00 Td (GET /api/fiscal/companies/{company}/diagnostics) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 219.00 Td (GET /api/fiscal/companies/{company}/points-of-sale) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 208.00 Td (GET /api/fiscal/companies/{company}/activities) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 184.00 Td (6. Emitir comprobante de prueba.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 144.00 499.00 33.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 144.00 4.00 33.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 163.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 149.00 Td (POST /api/fiscal/documents) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 125.00 Td (Para Responsable Inscripto, enviar invoice_mode=auto y detalle de IVA por alicuota cuando) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 112.00 Td (corresponda:) Tj ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 5433 >>
+stream
+q 0.050 0.130 0.220 rg 0.00 798.00 595.00 44.00 re f Q
+q 0.000 0.550 0.540 rg 0.00 794.00 595.00 4.00 re f Q
+BT 1.000 1.000 1.000 rg /F2 9.50 Tf 48.00 813.00 Td (Guia ARCA: Testing y Produccion) Tj ET
+BT 0.780 0.860 0.910 rg /F1 8.20 Tf 327.00 813.00 Td (Entorno testing / homologacion) Tj ET
+q 0.830 0.880 0.910 RG 0.70 w 48.00 42.00 m 547.00 42.00 l S Q
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 48.00 25.00 Td (API ARCA/AFIP - documentacion tecnica) Tj ET
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 505.00 25.00 Td (Pag. 5) Tj ET
+q 0.960 0.960 0.950 rg 48.00 701.00 499.00 77.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 701.00 4.00 77.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 764.00 Td (JSON) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 750.00 Td ({) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 739.00 Td (  "business_id": "tenant-demo",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 728.00 Td (  "origin": { "type": "sale", "id": "sale-1000" },) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 717.00 Td (  "invoice_mode": "auto",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 706.00 Td (  "customer": {) Tj ET
+q 0.960 0.960 0.950 rg 48.00 505.00 499.00 187.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 505.00 4.00 187.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 678.00 Td (JSON) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 664.00 Td (    "name": "Cliente SA",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 653.00 Td (    "document_type": "CUIT",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 642.00 Td (    "document_number": "30712345671",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 631.00 Td (    "iva_condition": "responsable_inscripto") Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 620.00 Td (  },) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 609.00 Td (  "amounts": {) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 598.00 Td (    "imp_total": 121,) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 587.00 Td (    "imp_neto": 100,) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 576.00 Td (    "imp_iva": 21,) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 565.00 Td (    "iva_items": [) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 554.00 Td (      { "id": 5, "base_imp": 100, "importe": 21 }) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 543.00 Td (    ]) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 532.00 Td (  },) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 521.00 Td (  "idempotency_key": "sale-1000-invoice") Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 510.00 Td (}) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 486.00 Td (7. Ver datos fiscales.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 435.00 499.00 44.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 435.00 4.00 44.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 465.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 451.00 Td (GET /api/admin/) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 440.00 Td (GET /api/fiscal/documents/iva-sales?business_id=tenant-demo) Tj ET
+q 0.000 0.550 0.540 rg 48.00 400.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 407.00 Td (Entorno produccion) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 372.00 Td (Objetivo: emitir comprobantes reales con impacto fiscal.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 355.00 Td (1. Confirmar requisitos del contribuyente.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 338.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 338.00 Td (CUIT correcto.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 322.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 322.00 Td (Condicion fiscal correcta: responsable_inscripto, monotributo o) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 306.00 Td (exento.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 289.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 289.00 Td (Punto de venta electronico habilitado para WSFEv1.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 273.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 273.00 Td (Certificado digital de produccion vigente.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 257.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 257.00 Td (Servicio wsfe delegado/asociado al certificado.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 241.00 Td (2. Crear o actualizar empresa fiscal con environment=production.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 113.00 499.00 121.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 113.00 4.00 121.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 220.00 Td (JSON) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 206.00 Td ({) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 195.00 Td (  "external_business_id": "tenant-prod",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 184.00 Td (  "cuit": "20123456789",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 173.00 Td (  "legal_name": "Empresa Real SA",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 162.00 Td (  "fiscal_condition": "responsable_inscripto",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 151.00 Td (  "environment": "production",) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 140.00 Td (  "default_point_of_sale": 1,) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 129.00 Td (  "enabled": true) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 118.00 Td (}) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 94.00 Td (3. Generar CSR desde esta API para produccion.) Tj ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 14 0 R >>
+endobj
+16 0 obj
+<< /Length 5801 >>
+stream
+q 0.050 0.130 0.220 rg 0.00 798.00 595.00 44.00 re f Q
+q 0.000 0.550 0.540 rg 0.00 794.00 595.00 4.00 re f Q
+BT 1.000 1.000 1.000 rg /F2 9.50 Tf 48.00 813.00 Td (Guia ARCA: Testing y Produccion) Tj ET
+BT 0.780 0.860 0.910 rg /F1 8.20 Tf 327.00 813.00 Td (Entorno produccion) Tj ET
+q 0.830 0.880 0.910 RG 0.70 w 48.00 42.00 m 547.00 42.00 l S Q
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 48.00 25.00 Td (API ARCA/AFIP - documentacion tecnica) Tj ET
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 505.00 25.00 Td (Pag. 6) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 768.00 Td (Usar un key_name distinto al de testing.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 751.00 Td (4. Gestionar certificado de produccion en ARCA.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 734.00 Td (Segun la documentacion oficial, los certificados de produccion se gestionan con "Administracion) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 721.00 Td (de Certificados Digitales" y "Administrador de Relaciones de Clave Fiscal".) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 704.00 Td (Pasos operativos:) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 687.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 687.00 Td (Ingresar con clave fiscal al CUIT correspondiente.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 671.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 671.00 Td (Usar Administracion de Certificados Digitales.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 655.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 655.00 Td (Cargar el CSR generado por esta API.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 639.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 639.00 Td (Descargar el certificado de produccion.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 623.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 623.00 Td (Delegar/asociar el servicio wsfe en Administrador de Relaciones.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 607.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 607.00 Td (Confirmar que el punto de venta productivo esta habilitado.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 591.00 Td (5. Cargar certificado productivo en esta API.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 551.00 499.00 33.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 551.00 4.00 33.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 570.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 556.00 Td (PUT /api/fiscal/companies/{company}/credentials/{credential}/certificate) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 532.00 Td (6. Validar antes de emitir.) Tj ET
+q 0.960 0.960 0.950 rg 48.00 470.00 499.00 55.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 470.00 4.00 55.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 511.00 Td (HTTP) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 497.00 Td (GET /api/fiscal/companies/{company}/status) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 486.00 Td (GET /api/fiscal/companies/{company}/diagnostics) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 475.00 Td (GET /api/fiscal/companies/{company}/points-of-sale) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 451.00 Td (No emitir si ready=false o si diagnostics marca errores de certificado, token, punto de venta o) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 438.00 Td (WSFEv1.) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 421.00 Td (7. Emitir comprobantes reales.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 404.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 404.00 Td (Usar invoice_mode=auto para que la API resuelva A/B/C.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 388.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 388.00 Td (Usar document_kind=invoice, credit_note o debit_note.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 372.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 372.00 Td (Para notas de credito/debito enviar associated_vouchers.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 356.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 356.00 Td (Enviar idempotency_key estable por operacion comercial.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 340.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 340.00 Td (Si un documento queda uncertain, no emitir otro comprobante; usar) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 324.00 Td (reconcile y luego retry si corresponde.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 291.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 298.00 Td (Endpoints ARCA configurados en esta API) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 263.00 Td (Testing:) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 246.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 246.00 Td (WSAA: https://wsaahomo.afip.gov.ar/ws/services/LoginCms) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 230.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 230.00 Td (WSFEv1: https://wswhomo.afip.gov.ar/wsfev1/service.asmx) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 214.00 Td (Produccion:) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 197.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 197.00 Td (WSAA: https://wsaa.afip.gov.ar/ws/services/LoginCms) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 181.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 181.00 Td (WSFEv1: https://servicios1.afip.gov.ar/wsfev1/service.asmx) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 165.00 Td (Estos valores estan en config/fiscal.php y pueden sobreescribirse por .env.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 132.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 139.00 Td (Variables .env recomendadas) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 104.00 Td (Testing:) Tj ET
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Length 5616 >>
+stream
+q 0.050 0.130 0.220 rg 0.00 798.00 595.00 44.00 re f Q
+q 0.000 0.550 0.540 rg 0.00 794.00 595.00 4.00 re f Q
+BT 1.000 1.000 1.000 rg /F2 9.50 Tf 48.00 813.00 Td (Guia ARCA: Testing y Produccion) Tj ET
+BT 0.780 0.860 0.910 rg /F1 8.20 Tf 327.00 813.00 Td (Variables .env recomendadas) Tj ET
+q 0.830 0.880 0.910 RG 0.70 w 48.00 42.00 m 547.00 42.00 l S Q
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 48.00 25.00 Td (API ARCA/AFIP - documentacion tecnica) Tj ET
+BT 0.460 0.510 0.560 rg /F1 7.60 Tf 505.00 25.00 Td (Pag. 7) Tj ET
+q 0.960 0.960 0.950 rg 48.00 701.00 499.00 77.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 701.00 4.00 77.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 764.00 Td (ENV) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 750.00 Td (FISCAL_API_TOKENS=token-interno) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 739.00 Td (FISCAL_WSAA_SERVICE=wsfe) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 728.00 Td (FISCAL_WSAA_TESTING_URL=https://wsaahomo.afip.gov.ar/ws/services/LoginCms) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 717.00 Td (FISCAL_WSFEV1_TESTING_URL=https://wswhomo.afip.gov.ar/wsfev1/service.asmx) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 706.00 Td (FISCAL_DEFAULT_CURRENCY=PES) Tj ET
+q 0.960 0.960 0.950 rg 48.00 659.00 499.00 33.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 659.00 4.00 33.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 678.00 Td (ENV) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 664.00 Td (FISCAL_DEFAULT_IVA_ID=5) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 640.00 Td (Produccion:) Tj ET
+q 0.960 0.960 0.950 rg 48.00 534.00 499.00 99.00 re f Q
+q 0.000 0.550 0.540 rg 48.00 534.00 4.00 99.00 re f Q
+BT 0.460 0.510 0.560 rg /F2 7.50 Tf 60.00 619.00 Td (ENV) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 605.00 Td (FISCAL_API_TOKENS=token-interno) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 594.00 Td (FISCAL_WSAA_SERVICE=wsfe) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 583.00 Td (FISCAL_WSAA_PRODUCTION_URL=https://wsaa.afip.gov.ar/ws/services/LoginCms) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 572.00 Td (FISCAL_WSFEV1_PRODUCTION_URL=https://servicios1.afip.gov.ar/wsfev1/service.asmx) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 561.00 Td (FISCAL_DEFAULT_CURRENCY=PES) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 550.00 Td (FISCAL_DEFAULT_IVA_ID=5) Tj ET
+BT 0.080 0.090 0.100 rg /F3 7.70 Tf 60.00 539.00 Td (OPENSSL_CONF=/ruta/al/openssl.cnf) Tj ET
+q 0.000 0.550 0.540 rg 48.00 499.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 506.00 Td (Checklist previo a produccion) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 471.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 471.00 Td (Empresa creada con environment=production.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 455.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 455.00 Td (fiscal_condition correcto.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 439.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 439.00 Td (Certificado de produccion activo y vigente.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 423.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 423.00 Td (Certificado corresponde a la clave privada generada.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 407.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 407.00 Td (Punto de venta productivo correcto y no bloqueado.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 391.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 391.00 Td (GET /status devuelve ready=true.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 375.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 375.00 Td (GET /diagnostics sin errores bloqueantes.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 359.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 359.00 Td (Emision probada en testing con el mismo flujo.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 343.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 343.00 Td (SaaS guarda fiscal_document_id, cbte_type, punto de venta, numero, CAE,) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 48.00 327.00 Td (vencimiento CAE, importes e IVA por alicuota.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 310.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 310.00 Td (SaaS implementa conciliacion para estado uncertain.) Tj ET
+q 0.000 0.550 0.540 rg 48.00 278.00 6.00 24.00 re f Q
+BT 0.030 0.310 0.520 rg /F2 16.00 Tf 64.00 285.00 Td (Riesgos operativos) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 250.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 250.00 Td (Usar certificado de testing en produccion, o viceversa.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 234.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 234.00 Td (Habilitar un punto de venta distinto al configurado.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 218.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 218.00 Td (Reemitir comprobantes inciertos sin conciliar.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 202.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 202.00 Td (No enviar detalle de IVA por alicuota para Responsable Inscripto.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 186.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 186.00 Td (No asociar comprobante original en notas de credito/debito.) Tj ET
+BT 0.000 0.550 0.540 rg /F2 10.00 Tf 51.00 170.00 Td (-) Tj ET
+BT 0.080 0.090 0.100 rg /F1 9.20 Tf 66.00 170.00 Td (Cambiar APP_KEY sin migrar datos cifrados: rompe certificados y tickets.) Tj ET
+endstream
+endobj
+19 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 18 0 R >>
+endobj
+xref
+0 20
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000162 00000 n 
+0000000232 00000 n 
+0000000307 00000 n 
+0000000375 00000 n 
+0000002308 00000 n 
+0000002454 00000 n 
+0000003764 00000 n 
+0000003910 00000 n 
+0000009311 00000 n 
+0000009459 00000 n 
+0000015117 00000 n 
+0000015265 00000 n 
+0000020750 00000 n 
+0000020898 00000 n 
+0000026751 00000 n 
+0000026899 00000 n 
+0000032567 00000 n 
+trailer
+<< /Size 20 /Root 1 0 R >>
+startxref
+32715
+%%EOF

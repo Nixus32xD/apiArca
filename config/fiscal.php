@@ -110,4 +110,9 @@ return [
     'environment' => [
         'strict_endpoint_check' => (bool) env('FISCAL_STRICT_ENDPOINT_ENV_CHECK', true),
     ],
+
+    'admin' => [
+        'enabled' => (bool) env('FISCAL_ADMIN_ENABLED', false),
+        'token' => env('FISCAL_ADMIN_TOKEN'),
+    ],
 ];

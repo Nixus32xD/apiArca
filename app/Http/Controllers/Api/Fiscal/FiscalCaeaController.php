@@ -69,7 +69,7 @@ class FiscalCaeaController extends Controller
     {
         try {
             $result = $this->caeaService->reportDocument($document, $this->traceId($request));
-            $resource = new FiscalDocumentResource($result['document']->load(['company', 'attempts', 'events']));
+            $resource = new FiscalDocumentResource($result['document']->load(['company', 'ivaItems', 'attempts', 'events']));
 
             return $resource
                 ->additional(['meta' => ['raw_response' => $result['response']]])

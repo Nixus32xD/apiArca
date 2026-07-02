@@ -27,8 +27,14 @@ La API fiscal es la fuente de verdad para resolver el tipo de comprobante. El Sa
 | Dato | Codigo |
 | --- | --- |
 | Factura A | `cbte_type=1` |
+| Nota de Debito A | `cbte_type=2` |
+| Nota de Credito A | `cbte_type=3` |
 | Factura B | `cbte_type=6` |
+| Nota de Debito B | `cbte_type=7` |
+| Nota de Credito B | `cbte_type=8` |
 | Factura C | `cbte_type=11` |
+| Nota de Debito C | `cbte_type=12` |
+| Nota de Credito C | `cbte_type=13` |
 | CUIT | `DocTipo=80` |
 | DNI | `DocTipo=96` |
 | Consumidor Final sin identificar | `DocTipo=99`, `DocNro=0` |
@@ -81,5 +87,8 @@ Si `customer` no se envia, la API usa consumidor final sin identificar.
 - Factura A solo se permite con emisor y receptor Responsable Inscripto.
 - Factura B solo se permite para emisor Responsable Inscripto y receptor no Responsable Inscripto.
 - Factura C no se permite para emisor Responsable Inscripto.
+- Notas de credito/debito requieren comprobante asociado.
+- Para Responsable Inscripto, `ImpIVA` debe cerrar con `amounts.iva_items` y `ImpTotal` con sus componentes fiscales.
+- Los medios de pago no definen el tipo de comprobante ARCA; solo se guardan como dato operativo.
 
-TODO: revisar tratamiento de importes IVA para emisores Responsable Inscripto. Hoy el SaaS puede enviar importes sin discriminacion de IVA si su catalogo aun no maneja alicuotas.
+La API soporta alicuotas IVA 21%, 10.5%, 27%, 5%, 2.5% y 0% usando los IDs oficiales de WSFEv1.

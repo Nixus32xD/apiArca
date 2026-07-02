@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Fiscal\FiscalVoucherResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,10 +28,17 @@ class FiscalDocumentResource extends JsonResource
                 'id' => $this->origin_id,
             ],
             'document_type' => $this->document_type,
+            'document_kind' => data_get($this->normalized_payload, 'document_kind')
+                ?? FiscalVoucherResolver::documentKindForVoucher((int) $this->voucher_type),
             'point_of_sale' => $this->point_of_sale,
             'cbte_type' => $this->voucher_type,
             'concept' => $this->concept,
             'number' => $this->document_number,
+            'voucher_date' => $this->voucher_date?->toDateString()
+                ?? $this->formatAfipDate(data_get($this->normalized_payload, 'voucher_date')),
+            'customer' => $this->customerPayload(),
+            'amounts' => $this->amountsPayload(),
+            'payment' => $this->paymentPayload(),
             'status' => $this->status,
             'fiscal_status' => $this->fiscal_status,
             'authorization_type' => $this->authorization_type,
@@ -76,5 +84,78 @@ class FiscalDocumentResource extends JsonResource
                 'created_at' => $event->created_at?->toIso8601String(),
             ])),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function customerPayload(): array
+    {
+        $customer = data_get($this->normalized_payload, 'customer', []);
+
+        return is_array($customer) && $customer !== []
+            ? $customer
+            : [
+                'doc_type' => $this->customer_doc_type,
+                'doc_number' => $this->customer_doc_number ? (int) $this->customer_doc_number : null,
+                'document_number' => $this->customer_doc_number,
+                'name' => $this->customer_name,
+                'iva_condition' => $this->customer_iva_condition,
+                'tax_condition_id' => $this->customer_tax_condition_id,
+            ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function amountsPayload(): array
+    {
+        $amounts = data_get($this->normalized_payload, 'amounts', []);
+        $ivaItems = $this->whenLoaded(
+            'ivaItems',
+            fn () => $this->ivaItems->map(fn ($item) => [
+                'id' => $item->iva_id,
+                'rate' => $item->rate,
+                'base_imp' => $item->base_imp,
+                'importe' => $item->importe,
+            ])->values()->all(),
+            data_get($amounts, 'iva_items', []),
+        );
+
+        return [
+            'imp_total' => $this->imp_total ?? data_get($amounts, 'imp_total'),
+            'imp_neto' => $this->imp_neto ?? data_get($amounts, 'imp_neto'),
+            'imp_iva' => $this->imp_iva ?? data_get($amounts, 'imp_iva'),
+            'imp_trib' => $this->imp_trib ?? data_get($amounts, 'imp_trib'),
+            'imp_op_ex' => $this->imp_op_ex ?? data_get($amounts, 'imp_op_ex'),
+            'imp_tot_conc' => $this->imp_tot_conc ?? data_get($amounts, 'imp_tot_conc'),
+            'iva_items' => $ivaItems,
+            'trib_items' => data_get($amounts, 'trib_items', []),
+            'sign' => FiscalVoucherResolver::signForVoucher((int) $this->voucher_type),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function paymentPayload(): array
+    {
+        $payment = data_get($this->normalized_payload, 'payment', []);
+
+        return [
+            'method' => $this->payment_method ?? data_get($payment, 'method'),
+            'amount' => $this->payment_amount ?? data_get($payment, 'amount'),
+            'reference' => $this->payment_reference ?? data_get($payment, 'reference'),
+            'paid_at' => $this->paid_at?->toIso8601String() ?? data_get($payment, 'paid_at'),
+        ];
+    }
+
+    private function formatAfipDate(mixed $value): ?string
+    {
+        if (! is_scalar($value) || ! preg_match('/^\d{8}$/', (string) $value)) {
+            return null;
+        }
+
+        return substr((string) $value, 0, 4).'-'.substr((string) $value, 4, 2).'-'.substr((string) $value, 6, 2);
     }
 }

@@ -10,6 +10,7 @@ use App\Services\Fiscal\Contracts\Wsfev1Client;
 use App\Services\Fiscal\Support\ArcaErrorMapper;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -23,6 +24,7 @@ class FiscalInvoiceService
         private readonly FiscalWsfeRequestBuilder $requestBuilder,
         private readonly FiscalCaeaService $caeaService,
         private readonly FiscalVoucherResolver $voucherResolver,
+        private readonly FiscalAmountValidator $amountValidator,
     ) {}
 
     /**
@@ -47,13 +49,29 @@ class FiscalInvoiceService
         try {
             /** @var FiscalDocument $document */
             $document = DB::transaction(function () use ($company, $payload, $normalized, $idempotencyKey, $authorizationType): FiscalDocument {
-                return $company->documents()->create([
+                $document = $company->documents()->create([
                     'origin_type' => $normalized['origin']['type'],
                     'origin_id' => $normalized['origin']['id'],
                     'document_type' => $normalized['document_type'],
                     'point_of_sale' => $normalized['point_of_sale'],
                     'voucher_type' => $normalized['voucher_type'],
                     'concept' => $normalized['concept'],
+                    'voucher_date' => $this->dateFromAfip($normalized['voucher_date']),
+                    'customer_doc_type' => data_get($normalized, 'customer.doc_type'),
+                    'customer_doc_number' => data_get($normalized, 'customer.document_number'),
+                    'customer_name' => data_get($normalized, 'customer.name'),
+                    'customer_iva_condition' => data_get($normalized, 'customer.iva_condition'),
+                    'customer_tax_condition_id' => data_get($normalized, 'customer.tax_condition_id'),
+                    'imp_total' => data_get($normalized, 'amounts.imp_total'),
+                    'imp_neto' => data_get($normalized, 'amounts.imp_neto'),
+                    'imp_iva' => data_get($normalized, 'amounts.imp_iva'),
+                    'imp_trib' => data_get($normalized, 'amounts.imp_trib'),
+                    'imp_op_ex' => data_get($normalized, 'amounts.imp_op_ex'),
+                    'imp_tot_conc' => data_get($normalized, 'amounts.imp_tot_conc'),
+                    'payment_method' => data_get($normalized, 'payment.method'),
+                    'payment_reference' => data_get($normalized, 'payment.reference'),
+                    'payment_amount' => data_get($normalized, 'payment.amount'),
+                    'paid_at' => data_get($normalized, 'payment.paid_at'),
                     'status' => 'processing',
                     'fiscal_status' => 'pending',
                     'authorization_type' => $authorizationType,
@@ -68,6 +86,10 @@ class FiscalInvoiceService
                     'normalized_payload' => $normalized,
                     'metadata' => $payload['metadata'] ?? null,
                 ]);
+
+                $this->syncIvaItems($document, $normalized['amounts']['iva_items']);
+
+                return $document;
             });
         } catch (QueryException) {
             $existing = $company->documents()->where('idempotency_key', $idempotencyKey)->first();
@@ -417,44 +439,84 @@ class FiscalInvoiceService
         $pointOfSale = $payload['point_of_sale'] ?? $company->default_point_of_sale;
         $concept = (int) ($payload['concept'] ?? config('fiscal.defaults.concept', 1));
         $voucher = $this->voucherResolver->resolve($company, $payload);
+        $voucherType = (int) $voucher['voucher_type'];
 
         if (! $pointOfSale) {
             throw new FiscalException('Point of sale is required.', 422, 'point_of_sale_required');
         }
 
+        $normalizedAmounts = $this->normalizeAmounts($amounts, $voucherType);
+        $associatedVouchers = $this->associatedVouchers($payload['associated_vouchers'] ?? []);
+
+        if (FiscalVoucherResolver::requiresAssociatedVoucher($voucherType) && $associatedVouchers === []) {
+            throw new FiscalException('Credit and debit notes require at least one associated voucher.', 422, 'associated_voucher_required');
+        }
+
+        $this->amountValidator->validateSale($voucherType, $normalizedAmounts);
+
         return [
             'origin' => $this->origin($payload),
             'invoice_mode' => $voucher['invoice_mode'],
             'document_type' => $voucher['document_type'],
+            'document_kind' => $voucher['document_kind'],
             'point_of_sale' => (int) $pointOfSale,
-            'voucher_type' => (int) $voucher['voucher_type'],
+            'voucher_type' => $voucherType,
             'concept' => $concept,
             'issuer' => $voucher['issuer'],
             'customer' => $voucher['customer'],
-            'amounts' => [
-                'imp_total' => $this->decimal($amounts['imp_total']),
-                'imp_neto' => $this->decimal($amounts['imp_neto']),
-                'imp_iva' => $this->decimal($amounts['imp_iva'] ?? 0),
-                'imp_trib' => $this->decimal($amounts['imp_trib'] ?? 0),
-                'imp_op_ex' => $this->decimal($amounts['imp_op_ex'] ?? 0),
-                'imp_tot_conc' => $this->decimal($amounts['imp_tot_conc'] ?? 0),
-                'iva_items' => $this->ivaItems($amounts),
-                'trib_items' => $this->tribItems($amounts),
-            ],
+            'amounts' => $normalizedAmounts,
             'currency' => $payload['currency'] ?? config('fiscal.defaults.currency', 'PES'),
             'currency_rate' => $this->decimal($payload['currency_rate'] ?? config('fiscal.defaults.currency_rate', 1), 6),
             'voucher_date' => $this->requestBuilder->afipDate($payload['voucher_date'] ?? now()),
+            'payment' => $this->payment($payload),
             'service_dates' => [
                 'from' => isset($payload['service_dates']['from']) ? $this->requestBuilder->afipDate($payload['service_dates']['from']) : null,
                 'to' => isset($payload['service_dates']['to']) ? $this->requestBuilder->afipDate($payload['service_dates']['to']) : null,
                 'payment_due_date' => isset($payload['service_dates']['payment_due_date']) ? $this->requestBuilder->afipDate($payload['service_dates']['payment_due_date']) : null,
             ],
             'items' => $payload['items'] ?? [],
-            'associated_vouchers' => $payload['associated_vouchers'] ?? [],
+            'associated_vouchers' => $associatedVouchers,
             'optional_fields' => $payload['optional_fields'] ?? [],
             'activities' => $this->activities($payload['activities'] ?? []),
             'metadata' => $payload['metadata'] ?? [],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $amounts
+     * @return array<string, mixed>
+     */
+    private function normalizeAmounts(array $amounts, int $voucherType): array
+    {
+        $ivaItems = $this->ivaItems($amounts);
+        $tribItems = $this->tribItems($amounts);
+        $impIva = array_key_exists('imp_iva', $amounts)
+            ? $this->decimal($amounts['imp_iva'])
+            : $this->sumItems($ivaItems, 'Importe');
+        $impTrib = array_key_exists('imp_trib', $amounts)
+            ? $this->decimal($amounts['imp_trib'])
+            : $this->sumItems($tribItems, 'Importe');
+
+        $normalized = [
+            'imp_total' => $this->decimal($amounts['imp_total']),
+            'imp_neto' => $this->decimal($amounts['imp_neto']),
+            'imp_iva' => $impIva,
+            'imp_trib' => $impTrib,
+            'imp_op_ex' => $this->decimal($amounts['imp_op_ex'] ?? 0),
+            'imp_tot_conc' => $this->decimal($amounts['imp_tot_conc'] ?? 0),
+            'iva_items' => $ivaItems,
+            'trib_items' => $tribItems,
+        ];
+
+        if (FiscalVoucherResolver::isClassC($voucherType)) {
+            $normalized['imp_neto'] = $this->decimal(max(0, (float) $normalized['imp_total'] - (float) $normalized['imp_trib']));
+            $normalized['imp_iva'] = '0.00';
+            $normalized['imp_op_ex'] = '0.00';
+            $normalized['imp_tot_conc'] = '0.00';
+            $normalized['iva_items'] = [];
+        }
+
+        return $normalized;
     }
 
     /**
@@ -542,6 +604,121 @@ class FiscalInvoiceService
             'Alic' => $this->decimal($item['alic'] ?? 0),
             'Importe' => $this->decimal($item['importe'] ?? 0),
         ], $items);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function syncIvaItems(FiscalDocument $document, array $items): void
+    {
+        $document->ivaItems()->delete();
+
+        foreach ($items as $item) {
+            $ivaId = (int) $item['Id'];
+
+            $document->ivaItems()->create([
+                'iva_id' => $ivaId,
+                'rate' => $this->amountValidator->ivaRateFor($ivaId),
+                'base_imp' => $item['BaseImp'],
+                'importe' => $item['Importe'],
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function sumItems(array $items, string $key): string
+    {
+        return $this->decimal(array_reduce(
+            $items,
+            fn (float $carry, array $item): float => $carry + (float) ($item[$key] ?? 0),
+            0.0,
+        ));
+    }
+
+    /**
+     * @param  array<int, mixed>  $vouchers
+     * @return array<int, array<string, mixed>>
+     */
+    private function associatedVouchers(array $vouchers): array
+    {
+        return array_values(array_filter(array_map(function (mixed $voucher): ?array {
+            if (! is_array($voucher)) {
+                return null;
+            }
+
+            $type = $voucher['Tipo'] ?? $voucher['type'] ?? null;
+            $pointOfSale = $voucher['PtoVta'] ?? $voucher['point_of_sale'] ?? null;
+            $number = $voucher['Nro'] ?? $voucher['number'] ?? null;
+
+            if (! is_numeric($type) || ! is_numeric($pointOfSale) || ! is_numeric($number)) {
+                return null;
+            }
+
+            $normalized = [
+                'Tipo' => (int) $type,
+                'PtoVta' => (int) $pointOfSale,
+                'Nro' => (int) $number,
+            ];
+
+            $cuit = $voucher['Cuit'] ?? $voucher['cuit'] ?? null;
+            if (is_scalar($cuit) && preg_match('/^\d{11}$/', (string) $cuit)) {
+                $normalized['Cuit'] = (string) $cuit;
+            }
+
+            $date = $voucher['CbteFch'] ?? $voucher['date'] ?? null;
+            if ($date !== null && $date !== '') {
+                $normalized['CbteFch'] = preg_match('/^\d{8}$/', (string) $date)
+                    ? (string) $date
+                    : $this->requestBuilder->afipDate($date);
+            }
+
+            return $normalized;
+        }, $vouchers)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function payment(array $payload): array
+    {
+        $payment = isset($payload['payment']) && is_array($payload['payment']) ? $payload['payment'] : [];
+        $method = $payment['method'] ?? $payload['payment_method'] ?? null;
+        $method = $this->paymentMethod($method);
+
+        return [
+            'method' => $method,
+            'amount' => isset($payment['amount']) ? $this->decimal($payment['amount']) : null,
+            'reference' => $this->nullableScalar($payment['reference'] ?? null),
+            'paid_at' => isset($payment['paid_at']) ? Carbon::parse($payment['paid_at'])->toDateTimeString() : null,
+        ];
+    }
+
+    private function paymentMethod(mixed $value): ?string
+    {
+        $value = strtolower(trim((string) $value));
+
+        return match ($value) {
+            'cash', 'efectivo' => 'cash',
+            'transfer', 'transferencia', 'bank_transfer' => 'bank_transfer',
+            'debit_card', 'debito' => 'debit_card',
+            'credit_card', 'credito' => 'credit_card',
+            'other', 'otro' => 'other',
+            default => null,
+        };
+    }
+
+    private function nullableScalar(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     /**
@@ -685,5 +862,14 @@ class FiscalInvoiceService
     private function decimal(mixed $value, int $scale = 2): string
     {
         return number_format((float) $value, $scale, '.', '');
+    }
+
+    private function dateFromAfip(mixed $value): ?string
+    {
+        if (! is_scalar($value) || ! preg_match('/^\d{8}$/', (string) $value)) {
+            return null;
+        }
+
+        return Carbon::createFromFormat('Ymd', (string) $value)->toDateString();
     }
 }
