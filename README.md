@@ -2,7 +2,8 @@
 
 API Laravel para gestionar empresas fiscales y emitir comprobantes electronicos contra ARCA/AFIP usando WSAA y WSFEv1. El servicio esta pensado como una capa interna entre un SaaS y los web services fiscales, con soporte multiempresa, credenciales por empresa, auditoria e idempotencia.
 
-La referencia extendida esta en [docs/fiscal-api.md](docs/fiscal-api.md).
+La referencia extendida esta en [docs/fiscal-api.md](docs/fiscal-api.md). Para
+despliegues en contenedores, ver [docs/docker-deployment.md](docs/docker-deployment.md).
 
 ## Stack
 
