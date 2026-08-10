@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Presentacion de integracion - API Fiscal ARCA</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 17mm 15mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      color: #1f2933;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    h1,
+    h2,
+    h3 {
+      color: #0f172a;
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 27px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      border-bottom: 1px solid #d9e2ec;
+      font-size: 18px;
+      margin-top: 22px;
+      padding-bottom: 5px;
+    }
+
+    h3 {
+      font-size: 14px;
+      margin-top: 15px;
+    }
+
+    p {
+      margin: 7px 0;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 8px 20px;
+      padding: 0;
+    }
+
+    li {
+      margin: 3px 0;
+    }
+
+    code {
+      background: #eef2f7;
+      border-radius: 3px;
+      color: #102a43;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      padding: 1px 4px;
+    }
+
+    pre {
+      background: #0f172a;
+      border-radius: 6px;
+      color: #e5edf5;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 10.2px;
+      line-height: 1.38;
+      margin: 8px 0 12px;
+      overflow-wrap: anywhere;
+      padding: 10px;
+      white-space: pre-wrap;
+    }
+
+    table {
+      border-collapse: collapse;
+      margin: 10px 0 14px;
+      page-break-inside: avoid;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border: 1px solid #d9e2ec;
+      padding: 6px 7px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f0f4f8;
+      color: #102a43;
+      font-weight: 700;
+    }
+
+    .cover {
+      border-bottom: 3px solid #1d4ed8;
+      margin-bottom: 18px;
+      padding-bottom: 18px;
+    }
+
+    .subtitle {
+      color: #52606d;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .meta {
+      color: #627d98;
+      font-size: 11px;
+      margin-top: 18px;
+    }
+
+    .callout {
+      background: #eff6ff;
+      border-left: 4px solid #1d4ed8;
+      margin: 12px 0;
+      padding: 10px 12px;
+    }
+
+    .warning {
+      background: #fff8e6;
+      border-left-color: #d97706;
+    }
+
+    .success {
+      background: #ecfdf5;
+      border-left-color: #059669;
+    }
+
+    .small {
+      color: #52606d;
+      font-size: 10.5px;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <h1>Integracion con API Fiscal ARCA/AFIP</h1>
+    <p class="subtitle">Documentacion de presentacion para conectar una aplicacion externa de turnos/trabajos con el microservicio fiscal.</p>
+    <p class="meta">
+      URL publica: <code>https://apiarca-main-kf3cmx.laravel.cloud</code><br>
+      Base API fiscal: <code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal</code><br>
+      Fecha: 30/06/2026
+    </p>
+  </section>
+
+  <div class="callout success">
+    <strong>Resumen ejecutivo:</strong> la aplicacion externa no debe integrarse directamente con ARCA/AFIP. Debe consumir esta API fiscal, que se encarga de credenciales, WSAA, WSFEv1, numeracion, CAE/CAEA, auditoria e idempotencia.
+  </div>
+
+  <h2>1. Estado de la API publica</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Chequeo</th>
+        <th>URL</th>
+        <th>Resultado esperado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Aplicacion desplegada</td>
+        <td><code>https://apiarca-main-kf3cmx.laravel.cloud</code></td>
+        <td>Debe abrir la aplicacion Laravel.</td>
+      </tr>
+      <tr>
+        <td>Health check</td>
+        <td><code>https://apiarca-main-kf3cmx.laravel.cloud/up</code></td>
+        <td>HTTP <code>200</code>.</td>
+      </tr>
+      <tr>
+        <td>API fiscal protegida</td>
+        <td><code>/api/fiscal/*</code></td>
+        <td>Sin token debe responder HTTP <code>401</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Conexion requerida</h2>
+  <p>La aplicacion externa debe guardar estos valores en configuracion segura del backend. No deben quedar expuestos en JavaScript publico ni en una app cliente.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Valor</th>
+        <th>Descripcion</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>FISCAL_API_BASE_URL</code></td>
+        <td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal</code></td>
+        <td>URL base para todas las llamadas fiscales.</td>
+      </tr>
+      <tr>
+        <td><code>FISCAL_API_TOKEN</code></td>
+        <td>A definir por el propietario de la API</td>
+        <td>Token interno configurado en la API. Se envia como Bearer token.</td>
+      </tr>
+      <tr>
+        <td><code>FISCAL_BUSINESS_ID</code></td>
+        <td>Ejemplo: <code>empresa-amigo-1</code></td>
+        <td>Identificador estable de la empresa fiscal dentro de la API.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Headers obligatorios</h3>
+  <pre>Authorization: Bearer {FISCAL_API_TOKEN}
+Content-Type: application/json
+X-Trace-Id: turno-123</pre>
+  <p><code>X-Trace-Id</code> no es obligatorio, pero se recomienda mandarlo con el ID del turno/trabajo para rastrear logs.</p>
+
+  <h2>3. Que debe construir la aplicacion externa</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Modulo / vista</th>
+        <th>Objetivo</th>
+        <th>Endpoint principal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Configuracion de API Fiscal</td>
+        <td>Guardar URL, token y empresa fiscal.</td>
+        <td><code>GET /companies/{company}/status</code></td>
+      </tr>
+      <tr>
+        <td>Empresa fiscal</td>
+        <td>Crear o actualizar CUIT, razon social, condicion fiscal, ambiente y punto de venta.</td>
+        <td><code>POST /companies</code></td>
+      </tr>
+      <tr>
+        <td>Credenciales ARCA</td>
+        <td>Generar CSR, cargar certificado y probar credenciales.</td>
+        <td><code>POST /companies/{company}/credentials/csr</code></td>
+      </tr>
+      <tr>
+        <td>Estado y diagnostico</td>
+        <td>Ver si la empresa esta lista para facturar.</td>
+        <td><code>GET /companies/{company}/status</code></td>
+      </tr>
+      <tr>
+        <td>Facturacion de turno</td>
+        <td>Emitir factura al finalizar un turno/trabajo.</td>
+        <td><code>POST /documents</code></td>
+      </tr>
+      <tr>
+        <td>Historial fiscal</td>
+        <td>Consultar facturas emitidas por turno/origen.</td>
+        <td><code>GET /documents/by-origin</code></td>
+      </tr>
+      <tr>
+        <td>PDF de comprobante</td>
+        <td>Generar PDF con datos del turno + datos fiscales devueltos por la API.</td>
+        <td>No aplica. Lo genera la app externa.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Flujo de alta inicial</h2>
+
+  <h3>4.1 Crear o actualizar empresa fiscal</h3>
+  <p><strong>Endpoint completo:</strong></p>
+  <pre>POST https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies</pre>
+  <p><strong>Request:</strong></p>
+  <pre>{
+  "external_business_id": "empresa-amigo-1",
+  "cuit": "20123456789",
+  "legal_name": "Empresa Demo",
+  "fiscal_condition": "monotributo",
+  "environment": "testing",
+  "default_point_of_sale": 1,
+  "default_voucher_type": 11,
+  "enabled": true,
+  "onboarding_metadata": {
+    "source": "app-externa"
+  }
+}</pre>
+
+  <p><strong>Campos importantes:</strong></p>
+  <ul>
+    <li><code>external_business_id</code>: identificador que luego se usara como <code>business_id</code>.</li>
+    <li><code>fiscal_condition</code>: <code>monotributo</code>, <code>responsable_inscripto</code> o <code>exento</code>.</li>
+    <li><code>environment</code>: <code>testing</code> para homologacion, <code>production</code> para produccion.</li>
+    <li><code>default_point_of_sale</code>: punto de venta habilitado en ARCA.</li>
+  </ul>
+
+  <h3>4.2 Generar CSR para certificado ARCA</h3>
+  <p>Este es el flujo recomendado porque la clave privada queda generada y guardada por la API fiscal, no por la aplicacion externa.</p>
+  <pre>POST https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/empresa-amigo-1/credentials/csr</pre>
+  <pre>{
+  "key_name": "empresa-amigo-prod.key",
+  "common_name": "empresa-amigo-prod",
+  "organization_name": "Empresa Demo",
+  "country_name": "AR"
+}</pre>
+  <p>La respuesta devuelve un <code>credential.id</code> y un <code>csr</code>. La aplicacion externa debe mostrar/copiar ese CSR para cargarlo en ARCA/AFIP.</p>
+
+  <h3>4.3 Cargar certificado emitido por ARCA</h3>
+  <pre>PUT https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/empresa-amigo-1/credentials/{credential_id}/certificate</pre>
+  <pre>{
+  "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+  "active": true
+}</pre>
+  <p>La API valida que el certificado corresponda a la clave generada. Si no coincide, responde <code>409 certificate_private_key_mismatch</code>.</p>
+
+  <h3>4.4 Probar credenciales</h3>
+  <pre>POST https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/empresa-amigo-1/credentials/test</pre>
+  <p>Si responde correctamente, la empresa esta operativa para emitir comprobantes.</p>
+
+  <h2>5. Flujo operativo: facturar al cerrar un turno</h2>
+  <p>Cuando finaliza un turno/trabajo, la aplicacion externa debe emitir un comprobante con <code>POST /documents</code>.</p>
+  <div class="callout warning">
+    <strong>Regla clave:</strong> no generar una clave distinta ante errores o timeouts. Usar siempre el mismo <code>idempotency_key</code> para el mismo turno. Ejemplo: <code>turno-123-factura</code>.
+  </div>
+
+  <p><strong>Endpoint completo:</strong></p>
+  <pre>POST https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents</pre>
+
+  <p><strong>Request recomendado:</strong></p>
+  <pre>{
+  "business_id": "empresa-amigo-1",
+  "origin": {
+    "type": "sale",
+    "id": "turno-123"
+  },
+  "invoice_mode": "auto",
+  "concept": 2,
+  "point_of_sale": 1,
+  "customer": {
+    "name": "Juan Perez",
+    "document_type": "DNI",
+    "document_number": "30123456",
+    "iva_condition": "consumidor_final",
+    "address": "Calle 123"
+  },
+  "amounts": {
+    "imp_total": 12100,
+    "imp_neto": 10000,
+    "imp_iva": 2100,
+    "imp_trib": 0,
+    "imp_op_ex": 0,
+    "imp_tot_conc": 0
+  },
+  "service_dates": {
+    "from": "2026-06-30",
+    "to": "2026-06-30",
+    "payment_due_date": "2026-06-30"
+  },
+  "currency": "PES",
+  "currency_rate": 1,
+  "idempotency_key": "turno-123-factura",
+  "metadata": {
+    "turno_id": "turno-123",
+    "source": "app-externa"
+  }
+}</pre>
+
+  <h3>Mapeo recomendado de datos</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Aplicacion externa</th>
+        <th>API Fiscal</th>
+        <th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>ID empresa</td><td><code>business_id</code></td><td>Debe existir como <code>external_business_id</code>.</td></tr>
+      <tr><td>ID turno/trabajo</td><td><code>origin.id</code></td><td>Permite consultar luego por origen.</td></tr>
+      <tr><td>Tipo origen</td><td><code>origin.type</code></td><td>Usar <code>sale</code> para turnos facturables.</td></tr>
+      <tr><td>Resolucion de factura</td><td><code>invoice_mode</code></td><td>Usar <code>auto</code> para que la API resuelva A/B/C.</td></tr>
+      <tr><td>Servicio/trabajo</td><td><code>concept</code></td><td><code>2</code> servicios, <code>3</code> productos + servicios.</td></tr>
+      <tr><td>Cliente</td><td><code>customer</code></td><td>DNI, CUIT o consumidor final.</td></tr>
+      <tr><td>Importes</td><td><code>amounts</code></td><td>Total, neto, IVA, tributos, exento/no gravado.</td></tr>
+      <tr><td>Clave anti duplicado</td><td><code>idempotency_key</code></td><td>Unica y estable por turno.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Respuesta autorizada</h3>
+  <pre>{
+  "data": {
+    "id": 10,
+    "business_id": "empresa-amigo-1",
+    "company": {
+      "cuit": "20123456789",
+      "legal_name": "Empresa Demo",
+      "fiscal_condition": "monotributo",
+      "environment": "testing"
+    },
+    "origin": {
+      "type": "sale",
+      "id": "turno-123"
+    },
+    "document_type": "invoice_c",
+    "point_of_sale": 1,
+    "cbte_type": 11,
+    "concept": 2,
+    "number": 11,
+    "status": "authorized",
+    "fiscal_status": "authorized",
+    "authorization_type": "CAE",
+    "authorization_code": "12345678901234",
+    "cae": "12345678901234",
+    "cae_expires_at": "2026-07-10",
+    "idempotency_key": "turno-123-factura",
+    "error": {
+      "code": null,
+      "message": null
+    }
+  },
+  "meta": {
+    "idempotent_replay": false
+  }
+}</pre>
+
+  <h2>6. Datos que debe guardar la aplicacion externa</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Campo sugerido</th>
+        <th>Origen</th>
+        <th>Uso</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>turn_id</code></td><td>App externa</td><td>Relacion con turno/trabajo.</td></tr>
+      <tr><td><code>business_id</code></td><td>Config</td><td>Empresa fiscal utilizada.</td></tr>
+      <tr><td><code>idempotency_key</code></td><td>App externa</td><td>Evitar duplicados.</td></tr>
+      <tr><td><code>fiscal_document_id</code></td><td><code>data.id</code></td><td>ID del comprobante en la API fiscal.</td></tr>
+      <tr><td><code>status</code></td><td><code>data.status</code></td><td>Estado operativo.</td></tr>
+      <tr><td><code>fiscal_status</code></td><td><code>data.fiscal_status</code></td><td>Estado fiscal normalizado.</td></tr>
+      <tr><td><code>cbte_type</code></td><td><code>data.cbte_type</code></td><td>Tipo comprobante ARCA.</td></tr>
+      <tr><td><code>point_of_sale</code></td><td><code>data.point_of_sale</code></td><td>Punto de venta.</td></tr>
+      <tr><td><code>invoice_number</code></td><td><code>data.number</code></td><td>Numero de comprobante.</td></tr>
+      <tr><td><code>authorization_type</code></td><td><code>data.authorization_type</code></td><td>CAE o CAEA.</td></tr>
+      <tr><td><code>authorization_code</code></td><td><code>data.authorization_code</code></td><td>Codigo fiscal.</td></tr>
+      <tr><td><code>cae_expires_at</code></td><td><code>data.cae_expires_at</code></td><td>Vencimiento CAE.</td></tr>
+      <tr><td><code>api_response_json</code></td><td>Respuesta completa</td><td>Auditoria y soporte.</td></tr>
+      <tr><td><code>pdf_path</code></td><td>App externa</td><td>Ubicacion del PDF generado.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. Generacion del PDF de factura</h2>
+  <p>La API fiscal no genera el PDF comercial. La aplicacion externa debe generar el PDF usando sus datos internos y la respuesta fiscal.</p>
+
+  <h3>Datos comerciales desde la app externa</h3>
+  <ul>
+    <li>Emisor: razon social, CUIT, condicion fiscal, domicilio, ingresos brutos si aplica.</li>
+    <li>Cliente: nombre/razon social, documento/CUIT, domicilio, condicion fiscal.</li>
+    <li>Turno/trabajo: fecha, descripcion del servicio, profesional/operador si aplica.</li>
+    <li>Items: detalle, cantidad, precio unitario, subtotal.</li>
+    <li>Importes: neto, IVA, tributos, exentos/no gravados, total.</li>
+    <li>Forma de pago, observaciones o datos operativos propios.</li>
+  </ul>
+
+  <h3>Datos fiscales desde la API</h3>
+  <ul>
+    <li><code>document_type</code> y <code>cbte_type</code>: tipo de comprobante.</li>
+    <li><code>point_of_sale</code>: punto de venta.</li>
+    <li><code>number</code>: numero de comprobante.</li>
+    <li><code>authorization_code</code> / <code>cae</code>: CAE autorizado.</li>
+    <li><code>cae_expires_at</code>: vencimiento del CAE.</li>
+    <li><code>company.cuit</code>, <code>company.legal_name</code>, <code>company.fiscal_condition</code>.</li>
+  </ul>
+
+  <h3>QR fiscal</h3>
+  <p>El PDF deberia incluir QR fiscal cuando corresponda. La aplicacion externa puede construirlo con datos del comprobante y la respuesta fiscal.</p>
+  <pre>https://www.afip.gob.ar/fe/qr/?p={base64-json}</pre>
+  <pre>{
+  "ver": 1,
+  "fecha": "2026-06-30",
+  "cuit": 20123456789,
+  "ptoVta": 1,
+  "tipoCmp": 11,
+  "nroCmp": 11,
+  "importe": 12100.00,
+  "moneda": "PES",
+  "ctz": 1,
+  "tipoDocRec": 96,
+  "nroDocRec": 30123456,
+  "tipoCodAut": "E",
+  "codAut": 12345678901234
+}</pre>
+  <p class="small">Referencia oficial del QR: <code>https://www.afip.gob.ar/fe/qr/</code>. Validar en produccion cualquier cambio normativo antes de salir a clientes finales.</p>
+
+  <h2>8. Manejo de estados y errores</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Estado</th>
+        <th>Que significa</th>
+        <th>Accion recomendada</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>authorized</code></td><td>ARCA autorizo el comprobante.</td><td>Guardar respuesta y generar PDF.</td></tr>
+      <tr><td><code>rejected</code></td><td>ARCA rechazo los datos.</td><td>No generar PDF fiscal. Mostrar error y corregir.</td></tr>
+      <tr><td><code>error</code></td><td>Error local o fiscal sin autorizacion.</td><td>Guardar error, mostrar mensaje y revisar diagnostico.</td></tr>
+      <tr><td><code>uncertain</code></td><td>No se sabe si ARCA proceso el comprobante.</td><td>No emitir de nuevo. Ejecutar conciliacion.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Conciliacion y reintento seguro</h3>
+  <pre>POST https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents/{document_id}/reconcile
+POST https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents/{document_id}/retry</pre>
+  <p>Si un comprobante queda <code>uncertain</code>, la aplicacion externa no debe crear otro documento con otra clave. Debe usar el <code>document_id</code> devuelto y llamar a <code>reconcile</code>.</p>
+
+  <h2>9. Consulta por turno/origen</h2>
+  <p>Si la aplicacion externa pierde la respuesta o necesita reconstruir el estado fiscal del turno:</p>
+  <pre>GET https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents/by-origin?business_id=empresa-amigo-1&amp;origin_type=sale&amp;origin_id=turno-123</pre>
+
+  <h2>10. Tabla de endpoints</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Metodo</th>
+        <th>Endpoint completo</th>
+        <th>Uso</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>POST</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies</code></td><td>Crear/actualizar empresa.</td></tr>
+      <tr><td><code>PUT</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}</code></td><td>Actualizar empresa existente.</td></tr>
+      <tr><td><code>POST</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/credentials/csr</code></td><td>Generar CSR.</td></tr>
+      <tr><td><code>PUT</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/credentials/{credential}/certificate</code></td><td>Cargar certificado ARCA.</td></tr>
+      <tr><td><code>PUT</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/credentials</code></td><td>Carga directa de certificado + clave.</td></tr>
+      <tr><td><code>POST</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/credentials/test</code></td><td>Probar credenciales.</td></tr>
+      <tr><td><code>GET</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/status</code></td><td>Estado para UI.</td></tr>
+      <tr><td><code>GET</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/diagnostics</code></td><td>Diagnostico tecnico.</td></tr>
+      <tr><td><code>GET</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/points-of-sale</code></td><td>Puntos de venta.</td></tr>
+      <tr><td><code>GET</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/companies/{company}/activities</code></td><td>Actividades fiscales.</td></tr>
+      <tr><td><code>POST</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents</code></td><td>Emitir comprobante.</td></tr>
+      <tr><td><code>GET</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents/{document}</code></td><td>Consultar por ID fiscal.</td></tr>
+      <tr><td><code>GET</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents/by-origin</code></td><td>Consultar por turno/origen.</td></tr>
+      <tr><td><code>POST</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents/{document}/reconcile</code></td><td>Conciliar comprobante incierto.</td></tr>
+      <tr><td><code>POST</code></td><td><code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/documents/{document}/retry</code></td><td>Reintento seguro.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>11. Ejemplo C# / .NET</h2>
+  <pre>using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+
+var client = new HttpClient
+{
+    BaseAddress = new Uri("https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal/")
+};
+
+client.DefaultRequestHeaders.Authorization =
+    new AuthenticationHeaderValue("Bearer", fiscalApiToken);
+client.DefaultRequestHeaders.Add("X-Trace-Id", "turno-123");
+
+var payload = new
+{
+    business_id = "empresa-amigo-1",
+    origin = new { type = "sale", id = "turno-123" },
+    invoice_mode = "auto",
+    concept = 2,
+    point_of_sale = 1,
+    customer = new
+    {
+        name = "Juan Perez",
+        document_type = "DNI",
+        document_number = "30123456",
+        iva_condition = "consumidor_final"
+    },
+    amounts = new
+    {
+        imp_total = 12100,
+        imp_neto = 10000,
+        imp_iva = 2100,
+        imp_trib = 0,
+        imp_op_ex = 0,
+        imp_tot_conc = 0
+    },
+    currency = "PES",
+    currency_rate = 1,
+    idempotency_key = "turno-123-factura"
+};
+
+var json = JsonSerializer.Serialize(payload);
+var content = new StringContent(json, Encoding.UTF8, "application/json");
+var response = await client.PostAsync("documents", content);
+var body = await response.Content.ReadAsStringAsync();
+
+if (!response.IsSuccessStatusCode)
+{
+    throw new Exception(body);
+}
+
+// Guardar data.id, data.status, data.number, data.cae y data.cae_expires_at.
+// Generar PDF solo si data.status == "authorized".</pre>
+
+  <h2>12. Checklist de entrega para el equipo externo</h2>
+  <ol>
+    <li>Guardar URL base: <code>https://apiarca-main-kf3cmx.laravel.cloud/api/fiscal</code>.</li>
+    <li>Guardar token en backend y enviarlo como Bearer token.</li>
+    <li>Crear pantalla de empresa fiscal y consumir <code>POST /companies</code>.</li>
+    <li>Crear pantalla de credenciales con CSR, carga de certificado y test.</li>
+    <li>Crear pantalla de estado fiscal y bloquear facturacion si <code>ready=false</code>.</li>
+    <li>Al cerrar un turno, llamar a <code>POST /documents</code> con <code>idempotency_key</code> estable.</li>
+    <li>Guardar la respuesta fiscal completa asociada al turno.</li>
+    <li>Generar PDF solo con comprobante autorizado.</li>
+    <li>Implementar consulta por origen para recuperar facturas por turno.</li>
+    <li>Implementar conciliacion para estados <code>uncertain</code>.</li>
+  </ol>
+
+  <div class="callout">
+    <strong>Conclusion:</strong> con esta integracion, la aplicacion externa solo administra datos, consume endpoints HTTP y genera el PDF final. Toda la logica fiscal critica queda centralizada en la API desplegada en Laravel Cloud.
+  </div>
+</body>
+</html>

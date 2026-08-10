@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Base de integracion API ARCA</title>
+    <link rel="stylesheet" href="./base-integracion-apiarca.css">
+</head>
+<body>
+    <header>
+        <h1>Base de integracion API ARCA</h1>
+        <p>Formulario generico para validar empresa fiscal, operar homologacion/produccion y generar comprobantes usando las rutas reales de la API.</p>
+    </header>
+
+    <main>
+        <div class="layout">
+            <nav class="toc" aria-label="Secciones">
+                <h2>Flujo</h2>
+                <a href="#conexion">Conexion API</a>
+                <a href="#empresa">Datos fiscales</a>
+                <a href="#validacion">Validacion</a>
+                <a href="#homologacion">Homologacion</a>
+                <a href="#produccion">Produccion</a>
+                <a href="#factura">Generar factura</a>
+                <a href="#rutas">Rutas principales</a>
+                <a href="#request">Request generado</a>
+            </nav>
+
+            <div class="content">
+                <section class="section" id="conexion">
+                    <h2>Conexion API</h2>
+                    <p>Estos datos se usan para armar endpoints y headers. En una app real, el token debe vivir en backend o storage seguro, no hardcodeado en frontend publico.</p>
+                    <div class="grid">
+                        <label>
+                            Base URL
+                            <input id="baseUrl" value="https://api.tu-dominio.com" autocomplete="off">
+                        </label>
+                        <label>
+                            Token interno
+                            <input id="apiToken" value="token-largo-interno" autocomplete="off">
+                        </label>
+                    </div>
+                </section>
+
+                <section class="section" id="empresa">
+                    <h2>Datos fiscales</h2>
+                    <p>Alta o actualizacion de la empresa fiscal que luego va a emitir comprobantes.</p>
+                    <div class="grid">
+                        <label>
+                            Business ID
+                            <input id="businessId" value="estetica-001">
+                        </label>
+                        <label>
+                            CUIT emisor
+                            <input id="companyCuit" value="20123456789">
+                        </label>
+                        <label>
+                            Razon social
+                            <input id="legalName" value="Estetica Demo SA">
+                        </label>
+                        <label>
+                            Condicion fiscal
+                            <select id="fiscalCondition">
+                                <option value="monotributo">Monotributo</option>
+                                <option value="responsable_inscripto" selected>Responsable inscripto</option>
+                                <option value="exento">Exento</option>
+                            </select>
+                        </label>
+                        <label>
+                            Ambiente
+                            <select id="environment">
+                                <option value="testing">Homologacion</option>
+                                <option value="production">Produccion</option>
+                            </select>
+                        </label>
+                        <label>
+                            Punto de venta default
+                            <input id="pointOfSale" type="number" min="1" value="1">
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button type="button" data-action="company-upsert">Armar alta empresa</button>
+                        <button type="button" class="secondary" data-action="company-status">Armar status</button>
+                    </div>
+                </section>
+
+                <section class="section" id="validacion">
+                    <h2>Validacion</h2>
+                    <p>Usar antes de emitir. Primero status local; despues diagnostics, actividades y puntos de venta contra ARCA.</p>
+                    <ul class="checklist">
+                        <li>La empresa debe existir y estar habilitada.</li>
+                        <li>La credencial activa debe tener certificado vigente.</li>
+                        <li>El punto de venta debe estar habilitado en ARCA para WSFEv1.</li>
+                        <li>Si el comprobante lleva actividad, debe estar activa para el CUIT emisor.</li>
+                    </ul>
+                    <div class="actions">
+                        <button type="button" data-action="diagnostics">Armar diagnostico</button>
+                        <button type="button" class="secondary" data-action="activities">Armar actividades</button>
+                        <button type="button" class="secondary" data-action="points-of-sale">Armar puntos de venta</button>
+                    </div>
+                </section>
+
+                <section class="section" id="homologacion">
+                    <h2>Homologacion</h2>
+                    <p>Flujo recomendado para probar sin tocar produccion: crear empresa con <code>environment=testing</code>, generar CSR, cargarlo en ARCA homologacion y luego subir el certificado devuelto.</p>
+                    <div class="grid">
+                        <label>
+                            Key name
+                            <input id="keyName" value="estetica-demo-testing.key">
+                        </label>
+                        <label>
+                            Common name
+                            <input id="commonName" value="estetica-demo-testing">
+                        </label>
+                        <label class="full">
+                            Certificado .crt devuelto por ARCA
+                            <textarea id="certificate" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                        </label>
+                        <label>
+                            Credential ID
+                            <input id="credentialId" value="1">
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button type="button" data-action="csr">Armar CSR homologacion</button>
+                        <button type="button" class="secondary" data-action="certificate">Armar carga certificado</button>
+                    </div>
+                </section>
+
+                <section class="section" id="produccion">
+                    <h2>Produccion</h2>
+                    <p>Antes de emitir en produccion, repetir el onboarding con certificado productivo y empresa con <code>environment=production</code>.</p>
+                    <ul class="checklist">
+                        <li><code>APP_ENV=production</code> y <code>APP_DEBUG=false</code>.</li>
+                        <li><code>APP_KEY</code> generado y persistido; no rotarlo sin migracion.</li>
+                        <li><code>FISCAL_API_TOKENS</code>, <code>OPENSSL_CONF</code> y <code>FISCAL_OPENSSL_CONF</code> configurados.</li>
+                        <li>Scheduler activo para CAEA: <code>php artisan schedule:run</code>.</li>
+                        <li>Diagnostico OK antes de habilitar ventas reales.</li>
+                    </ul>
+                    <div class="actions">
+                        <button type="button" data-action="company-production">Armar alta produccion</button>
+                        <button type="button" class="secondary" data-action="diagnostics">Armar diagnostico produccion</button>
+                    </div>
+                </section>
+
+                <section class="section" id="factura">
+                    <h2>Generar factura</h2>
+                    <p>Para servicios de una estetica usar <code>concept=2</code> y completar fechas de servicio. Con <code>invoice_mode=auto</code>, la API resuelve Factura A/B/C.</p>
+                    <div class="note">Si el emisor es monotributo o exento, el comprobante sera tipo C y no debe discriminar IVA. Si es responsable inscripto, puede emitir B a consumidor final o A a responsable inscripto.</div>
+                    <div class="grid-three">
+                        <label>
+                            Origen tipo
+                            <select id="originType">
+                                <option value="sale">Venta</option>
+                                <option value="payment">Pago</option>
+                                <option value="manual">Manual</option>
+                            </select>
+                        </label>
+                        <label>
+                            Origen ID
+                            <input id="originId" value="turno-123">
+                        </label>
+                        <label>
+                            Concepto
+                            <select id="concept">
+                                <option value="2">Servicios</option>
+                                <option value="1">Productos</option>
+                                <option value="3">Productos y servicios</option>
+                            </select>
+                        </label>
+                        <label>
+                            Cliente tipo doc.
+                            <select id="customerDocType">
+                                <option value="CONSUMIDOR_FINAL">Consumidor final</option>
+                                <option value="DNI">DNI</option>
+                                <option value="CUIT">CUIT</option>
+                            </select>
+                        </label>
+                        <label>
+                            Cliente documento
+                            <input id="customerDocNumber" value="">
+                        </label>
+                        <label>
+                            Condicion IVA receptor
+                            <select id="customerCondition">
+                                <option value="consumidor_final">Consumidor final</option>
+                                <option value="monotributo">Monotributo</option>
+                                <option value="responsable_inscripto">Responsable inscripto</option>
+                                <option value="exento">Exento</option>
+                            </select>
+                        </label>
+                        <label>
+                            Total
+                            <input id="impTotal" type="number" step="0.01" value="12100">
+                        </label>
+                        <label>
+                            Neto
+                            <input id="impNeto" type="number" step="0.01" value="10000">
+                        </label>
+                        <label>
+                            IVA
+                            <input id="impIva" type="number" step="0.01" value="2100">
+                        </label>
+                        <label>
+                            Fecha comprobante
+                            <input id="voucherDate" type="date">
+                        </label>
+                        <label>
+                            Servicio desde
+                            <input id="serviceFrom" type="date">
+                        </label>
+                        <label>
+                            Servicio hasta
+                            <input id="serviceTo" type="date">
+                        </label>
+                        <label>
+                            Vto. pago
+                            <input id="paymentDue" type="date">
+                        </label>
+                        <label>
+                            Idempotency key
+                            <input id="idempotencyKey" value="turno-123-factura">
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button type="button" data-action="invoice">Armar factura</button>
+                        <button type="button" class="secondary" data-action="by-origin">Armar consulta por origen</button>
+                    </div>
+                    <div id="validationStatus" class="status">Completa los datos y arma el request.</div>
+                </section>
+
+                <section class="section" id="rutas">
+                    <h2>Rutas principales</h2>
+                    <ul class="endpoint-list">
+                        <li><span class="method">POST</span><code>/api/fiscal/companies</code></li>
+                        <li><span class="method">GET</span><code>/api/fiscal/companies/{company}/status</code></li>
+                        <li><span class="method">GET</span><code>/api/fiscal/companies/{company}/diagnostics</code></li>
+                        <li><span class="method">POST</span><code>/api/fiscal/companies/{company}/credentials/csr</code></li>
+                        <li><span class="method">PUT</span><code>/api/fiscal/companies/{company}/credentials/{credential}/certificate</code></li>
+                        <li><span class="method">POST</span><code>/api/fiscal/documents</code></li>
+                        <li><span class="method">GET</span><code>/api/fiscal/documents/by-origin</code></li>
+                        <li><span class="method">POST</span><code>/api/fiscal/documents/{document}/reconcile</code></li>
+                        <li><span class="method">POST</span><code>/api/fiscal/documents/{document}/retry</code></li>
+                    </ul>
+                </section>
+
+                <section class="section" id="request">
+                    <h2>Ejemplo Axios generado</h2>
+                    <p>Referencia para copiar al frontend real o al backend que consume esta API.</p>
+                    <pre id="output">// Selecciona una accion para generar el ejemplo con Axios.</pre>
+                    <div class="note">Instalar con <code>npm install axios</code>. En frontend publico, evitar exponer tokens internos y llamar esta API desde el backend del SaaS.</div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const today = new Date().toISOString().slice(0, 10);
+
+        ["voucherDate", "serviceFrom", "serviceTo", "paymentDue"].forEach((id) => {
+            $(id).value = today;
+        });
+
+        function endpoint(path) {
+            return $("baseUrl").value.replace(/\/$/, "") + path;
+        }
+
+        function authHeaders() {
+            return {
+                "Authorization": "Bearer " + $("apiToken").value,
+                "Content-Type": "application/json",
+                "X-Trace-Id": "web-" + Date.now()
+            };
+        }
+
+        function showRequest(method, path, body = null) {
+            const config = {
+                method: method.toLowerCase(),
+                url: endpoint(path),
+                headers: authHeaders()
+            };
+
+            if (body !== null) {
+                config.data = body;
+            }
+
+            const axiosConfig = JSON.stringify(config, null, 4)
+                .replace(/\n/g, "\n    ");
+
+            $("output").textContent = [
+                'import axios from "axios";',
+                "",
+                "async function callFiscalApi() {",
+                "    const response = await axios(" + axiosConfig + ");",
+                "    console.log(response.data);",
+                "    return response.data;",
+                "}",
+            ].join("\n");
+        }
+
+        function companyPayload(env = $("environment").value) {
+            return {
+                external_business_id: $("businessId").value,
+                cuit: $("companyCuit").value,
+                legal_name: $("legalName").value,
+                fiscal_condition: $("fiscalCondition").value,
+                environment: env,
+                default_point_of_sale: Number($("pointOfSale").value),
+                enabled: true
+            };
+        }
+
+        function invoicePayload() {
+            const concept = Number($("concept").value);
+            const impTotal = Number($("impTotal").value);
+            const impNeto = Number($("impNeto").value);
+            const impIva = Number($("impIva").value);
+            const customerDocType = $("customerDocType").value;
+            const customerDocNumber = $("customerDocNumber").value.trim();
+
+            const payload = {
+                business_id: $("businessId").value,
+                origin: {
+                    type: $("originType").value,
+                    id: $("originId").value
+                },
+                invoice_mode: "auto",
+                concept,
+                point_of_sale: Number($("pointOfSale").value),
+                voucher_date: $("voucherDate").value,
+                customer: {
+                    document_type: customerDocType,
+                    document_number: customerDocNumber,
+                    iva_condition: $("customerCondition").value
+                },
+                amounts: {
+                    imp_total: impTotal,
+                    imp_neto: impNeto,
+                    imp_iva: impIva,
+                    imp_trib: 0,
+                    imp_op_ex: 0,
+                    imp_tot_conc: 0,
+                    iva_items: impIva > 0 ? [{
+                        id: 5,
+                        base_imp: impNeto,
+                        importe: impIva
+                    }] : []
+                },
+                service_dates: {
+                    from: $("serviceFrom").value,
+                    to: $("serviceTo").value,
+                    payment_due_date: $("paymentDue").value
+                },
+                idempotency_key: $("idempotencyKey").value
+            };
+
+            if (customerDocType === "CONSUMIDOR_FINAL") {
+                payload.customer.document_number = "";
+                payload.customer.iva_condition = "consumidor_final";
+            }
+
+            return payload;
+        }
+
+        function validateInvoicePayload(payload) {
+            const errors = [];
+
+            if (!payload.business_id) errors.push("business_id es obligatorio.");
+            if (!payload.idempotency_key) errors.push("idempotency_key es obligatorio.");
+            if (!payload.origin.id) errors.push("origin.id es recomendable para evitar duplicados.");
+            if ([2, 3].includes(payload.concept)) {
+                if (!payload.service_dates.from) errors.push("service_dates.from es obligatorio para servicios.");
+                if (!payload.service_dates.to) errors.push("service_dates.to es obligatorio para servicios.");
+                if (!payload.service_dates.payment_due_date) errors.push("service_dates.payment_due_date es obligatorio para servicios.");
+            }
+            if (payload.amounts.imp_total !== payload.amounts.imp_neto + payload.amounts.imp_iva) {
+                errors.push("imp_total debe coincidir con neto + IVA cuando no hay tributos/exentos.");
+            }
+            if (["monotributo", "exento"].includes($("fiscalCondition").value) && payload.amounts.imp_iva > 0) {
+                errors.push("Para emisor monotributo/exento, usar imp_iva 0 porque se emite comprobante C.");
+            }
+
+            $("validationStatus").className = "status " + (errors.length ? "warn" : "ok");
+            $("validationStatus").textContent = errors.length ? errors.join(" ") : "Validacion basica OK para armar request.";
+        }
+
+        document.addEventListener("click", (event) => {
+            const action = event.target.dataset.action;
+            if (!action) return;
+
+            const company = encodeURIComponent($("businessId").value);
+
+            if (action === "company-upsert") {
+                showRequest("POST", "/api/fiscal/companies", companyPayload());
+            }
+
+            if (action === "company-production") {
+                $("environment").value = "production";
+                showRequest("POST", "/api/fiscal/companies", companyPayload("production"));
+            }
+
+            if (action === "company-status") {
+                showRequest("GET", `/api/fiscal/companies/${company}/status`);
+            }
+
+            if (action === "diagnostics") {
+                showRequest("GET", `/api/fiscal/companies/${company}/diagnostics`);
+            }
+
+            if (action === "activities") {
+                showRequest("GET", `/api/fiscal/companies/${company}/activities`);
+            }
+
+            if (action === "points-of-sale") {
+                showRequest("GET", `/api/fiscal/companies/${company}/points-of-sale`);
+            }
+
+            if (action === "csr") {
+                $("environment").value = "testing";
+                showRequest("POST", `/api/fiscal/companies/${company}/credentials/csr`, {
+                    key_name: $("keyName").value,
+                    common_name: $("commonName").value,
+                    organization_name: $("legalName").value,
+                    country_name: "AR"
+                });
+            }
+
+            if (action === "certificate") {
+                const credential = encodeURIComponent($("credentialId").value);
+                showRequest("PUT", `/api/fiscal/companies/${company}/credentials/${credential}/certificate`, {
+                    certificate: $("certificate").value,
+                    active: true
+                });
+            }
+
+            if (action === "invoice") {
+                const payload = invoicePayload();
+                validateInvoicePayload(payload);
+                showRequest("POST", "/api/fiscal/documents", payload);
+            }
+
+            if (action === "by-origin") {
+                const params = new URLSearchParams({
+                    business_id: $("businessId").value,
+                    origin_type: $("originType").value,
+                    origin_id: $("originId").value
+                });
+                showRequest("GET", `/api/fiscal/documents/by-origin?${params.toString()}`);
+            }
+        });
+    </script>
+</body>
+</html>
