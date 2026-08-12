@@ -9,6 +9,36 @@ Add-Type -AssemblyName System.Drawing
 $W = 1080
 $H = 1080
 
+$Glyph = @{
+    a_acute = [string] [char] 0x00E1
+    e_acute = [string] [char] 0x00E9
+    i_acute = [string] [char] 0x00ED
+    o_acute = [string] [char] 0x00F3
+    u_acute = [string] [char] 0x00FA
+    cap_a_acute = [string] [char] 0x00C1
+    cap_e_acute = [string] [char] 0x00C9
+    cap_i_acute = [string] [char] 0x00CD
+    cap_o_acute = [string] [char] 0x00D3
+    cap_u_acute = [string] [char] 0x00DA
+}
+
+function T {
+    param([string] $Text)
+
+    $Text = $Text.Replace('{a}', $Glyph.a_acute)
+    $Text = $Text.Replace('{e}', $Glyph.e_acute)
+    $Text = $Text.Replace('{i}', $Glyph.i_acute)
+    $Text = $Text.Replace('{o}', $Glyph.o_acute)
+    $Text = $Text.Replace('{u}', $Glyph.u_acute)
+    $Text = $Text.Replace('{A}', $Glyph.cap_a_acute)
+    $Text = $Text.Replace('{E}', $Glyph.cap_e_acute)
+    $Text = $Text.Replace('{I}', $Glyph.cap_i_acute)
+    $Text = $Text.Replace('{O}', $Glyph.cap_o_acute)
+    $Text = $Text.Replace('{U}', $Glyph.cap_u_acute)
+
+    $Text
+}
+
 function New-Color {
     param(
         [string] $Hex,
@@ -181,8 +211,8 @@ function Draw-Node {
 
     Draw-RoundRect $Graphics $X $Y $Width $Height 24 '#FFFFFF' '#D8E1EC' 2
     Draw-RoundRect $Graphics ($X + 22) ($Y + 22) 56 56 16 $Accent
-    Draw-Text $Graphics $Title 28 ([System.Drawing.FontStyle]::Bold) '#0B172A' ($X + 92) ($Y + 20) ($Width - 108) 42
-    Draw-Text $Graphics $Text 22 ([System.Drawing.FontStyle]::Regular) '#475569' ($X + 92) ($Y + 66) ($Width - 108) ($Height - 84)
+    Draw-Text $Graphics $Title 26 ([System.Drawing.FontStyle]::Bold) '#0B172A' ($X + 92) ($Y + 18) ($Width - 108) 58
+    Draw-Text $Graphics $Text 20 ([System.Drawing.FontStyle]::Regular) '#475569' ($X + 92) ($Y + 78) ($Width - 108) ($Height - 96)
 }
 
 function New-Slide01 {
@@ -199,14 +229,14 @@ function New-Slide01 {
     $overlay.Dispose()
 
     Draw-RoundRect $g 70 78 430 50 25 '#E8FBF8' '#B8EFE7' 1
-    Draw-Text $g 'Integracion fiscal para software' 24 ([System.Drawing.FontStyle]::Bold) '#087F7A' 92 88 380 32
-    Draw-Text $g 'API ARCA' 74 ([System.Drawing.FontStyle]::Bold) '#0B172A' 70 178 430 102
-    Draw-Text $g 'Facturacion fiscal integrada para gestion, SaaS y automatizacion comercial.' 35 ([System.Drawing.FontStyle]::Regular) '#334155' 74 315 405 190
+    Draw-Text $g (T 'Integraci{o}n fiscal para software') 24 ([System.Drawing.FontStyle]::Bold) '#087F7A' 92 88 380 32
+    Draw-Text $g "API Fiscal`npara ARCA" 66 ([System.Drawing.FontStyle]::Bold) '#0B172A' 70 164 430 170
+    Draw-Text $g (T 'Facturaci{o}n fiscal integrada para sistemas de gesti{o}n, SaaS y automatizaci{o}n comercial.') 33 ([System.Drawing.FontStyle]::Regular) '#334155' 74 340 405 210
 
     Draw-RoundRect $g 74 600 385 72 22 '#0B172A'
-    Draw-Text $g 'Automatizacion' 27 ([System.Drawing.FontStyle]::Bold) '#FFFFFF' 104 618 325 36 'Center'
+    Draw-Text $g (T 'Automatizaci{o}n') 27 ([System.Drawing.FontStyle]::Bold) '#FFFFFF' 104 618 325 36 'Center'
     Draw-RoundRect $g 74 690 385 72 22 '#146EF5'
-    Draw-Text $g 'Integracion' 27 ([System.Drawing.FontStyle]::Bold) '#FFFFFF' 104 708 325 36 'Center'
+    Draw-Text $g (T 'Integraci{o}n') 27 ([System.Drawing.FontStyle]::Bold) '#FFFFFF' 104 708 325 36 'Center'
     Draw-RoundRect $g 74 780 385 72 22 '#00A6A6'
     Draw-Text $g 'Trazabilidad' 27 ([System.Drawing.FontStyle]::Bold) '#FFFFFF' 104 798 325 36 'Center'
 
@@ -239,9 +269,9 @@ function New-Slide02 {
 
     $problems = @(
         'Datos duplicados entre sistemas',
-        'Mayor riesgo de errores de importe o condicion fiscal',
-        'Dificil saber que paso cuando una emision falla',
-        'Mas tiempo operativo para administracion y soporte'
+        (T 'Mayor riesgo de errores de importe o condici{o}n fiscal'),
+        (T 'Dif{i}cil saber qu{e} pas{o} cuando una emisi{o}n falla'),
+        (T 'M{a}s tiempo operativo para administraci{o}n y soporte')
     )
 
     $y = 690
@@ -252,7 +282,7 @@ function New-Slide02 {
         $y += 78
     }
 
-    Draw-Footer $g 'La API reduce friccion entre operacion comercial y facturacion.'
+    Draw-Footer $g (T 'La integraci{o}n reduce fricci{o}n entre operaci{o}n comercial y facturaci{o}n.')
     Save-Canvas $canvas.Bitmap $g (Join-Path $OutputDir 'slide-02-problema.png')
 }
 
@@ -261,23 +291,23 @@ function New-Slide03 {
     $g = $canvas.Graphics
     Fill-Background $g '#F7FAFC'
 
-    Draw-Header $g 'LA RELACION' 'Que hace la API con ARCA' 'Tu sistema opera por HTTP; la API centraliza la logica fiscal.'
+    Draw-Header $g (T 'LA RELACI{O}N') (T 'Qu{e} hace la integraci{o}n con ARCA') (T 'Tu sistema opera por HTTP; la API centraliza la l{o}gica fiscal.')
 
-    Draw-Node $g 70 430 280 170 'Sistema' "Ventas`nPagos`nTurnos" '#0B172A'
-    Draw-Node $g 390 390 300 250 'API ARCA' "Autenticacion`nValidaciones`nIdempotencia`nTrazas" '#00A6A6'
-    Draw-Node $g 730 430 280 170 'Servicios' "WSAA`nWSFEv1`nCAE / CAEA" '#146EF5'
+    Draw-Node $g 60 430 280 190 'Sistema' (T "Ventas`nPagos`nTurnos") '#0B172A'
+    Draw-Node $g 385 382 310 268 'API Fiscal' (T "Multiempresa`nA/B/C autom{a}tico`nIdempotencia`nConciliaci{o}n") '#00A6A6'
+    Draw-Node $g 740 410 300 230 'Servicios ARCA' (T "WSAA`nWSFEv1`nAutorizaci{o}n:`nCAE / CAEA") '#146EF5'
 
-    Draw-Line $g 355 515 380 515 '#00A6A6' 6
-    Draw-Line $g 695 515 720 515 '#146EF5' 6
+    Draw-Line $g 345 525 375 525 '#00A6A6' 6
+    Draw-Line $g 700 525 730 525 '#146EF5' 6
 
     Draw-RoundRect $g 165 705 750 136 28 '#FFFFFF' '#D8E1EC' 2
     Draw-Text $g 'Resultado' 27 ([System.Drawing.FontStyle]::Bold) '#00A6A6' 210 720 160 35
-    Draw-Text $g 'Comprobante autorizado, rechazado o pendiente de conciliacion, con estado trazable.' 27 ([System.Drawing.FontStyle]::Regular) '#334155' 210 760 660 70
+    Draw-Text $g (T 'Comprobante autorizado, rechazado o pendiente de conciliaci{o}n, con estado trazable.') 27 ([System.Drawing.FontStyle]::Regular) '#334155' 210 760 660 70
 
-    Draw-RoundRect $g 118 878 844 58 18 '#E8FBF8' '#B8EFE7' 1
-    Draw-Text $g 'No se afirma certificacion oficial: es una integracion tecnica con servicios fiscales.' 23 ([System.Drawing.FontStyle]::Regular) '#087F7A' 146 894 788 30 'Center'
+    Draw-RoundRect $g 118 872 844 72 18 '#E8FBF8' '#B8EFE7' 1
+    Draw-Text $g (T 'Integraci{o}n t{e}cnica con servicios de ARCA. No constituye una API oficial de ARCA.') 21 ([System.Drawing.FontStyle]::Regular) '#087F7A' 146 888 788 42 'Center'
 
-    Draw-Footer $g 'Flujo simplificado para comunicacion comercial.'
+    Draw-Footer $g (T 'Flujo simplificado para comunicaci{o}n comercial.')
     Save-Canvas $canvas.Bitmap $g (Join-Path $OutputDir 'slide-03-relacion-api-arca.png')
 }
 
@@ -286,14 +316,14 @@ function New-Slide04 {
     $g = $canvas.Graphics
     Fill-Background $g
 
-    Draw-Header $g 'BENEFICIOS' 'Automatizacion, control y menos errores' 'La facturacion fiscal se integra al proceso de negocio.'
+    Draw-Header $g 'BENEFICIOS' (T 'Automatizaci{o}n, control y reintentos seguros') (T 'La facturaci{o}n fiscal se integra al proceso de negocio.')
 
     $benefits = @(
-        @{ X = 78; Y = 410; T = 'Automatizacion'; D = 'Venta -> comprobante fiscal sin pasos manuales.'; C = '#00A6A6' },
+        @{ X = 78; Y = 410; T = (T 'Automatizaci{o}n'); D = 'Venta -> comprobante fiscal sin pasos manuales.'; C = '#00A6A6' },
         @{ X = 563; Y = 410; T = 'Menos carga manual'; D = 'Menos copia de datos y menos tareas repetitivas.'; C = '#146EF5' },
-        @{ X = 78; Y = 620; T = 'Integracion'; D = 'API HTTP para SaaS, ERP y sistemas propios.'; C = '#7C3AED' },
+        @{ X = 78; Y = 620; T = (T 'Integraci{o}n'); D = 'API HTTP para SaaS, ERP y sistemas propios.'; C = '#7C3AED' },
         @{ X = 563; Y = 620; T = 'Trazabilidad'; D = 'Logs, intentos, eventos, estados y trace_id.'; C = '#0B172A' },
-        @{ X = 320; Y = 830; T = 'Menos errores'; D = 'Validaciones, idempotencia y conciliacion segura.'; C = '#22C55E' }
+        @{ X = 320; Y = 830; T = 'Reintentos seguros'; D = (T 'Idempotencia y conciliaci{o}n antes de volver a emitir.'); C = '#22C55E' }
     )
 
     foreach ($b in $benefits) {
@@ -311,26 +341,27 @@ function New-Slide05 {
     $g = $canvas.Graphics
     Fill-Background $g '#F8FAFC'
 
-    Draw-Header $g 'CASOS DE USO' 'Donde encaja API ARCA' 'Para plataformas que venden, cobran o registran operaciones comerciales.'
+    Draw-Header $g 'CASOS DE USO' (T 'D{o}nde encaja la integraci{o}n') 'Para plataformas que venden, cobran o registran operaciones comerciales.'
 
     $items = @(
-        @{ X = 80; Y = 405; T = 'SaaS multiempresa'; D = 'Facturacion por tenant o cliente.'; C = '#146EF5' },
-        @{ X = 390; Y = 405; T = 'ERP / gestion'; D = 'Emision desde el flujo operativo.'; C = '#00A6A6' },
-        @{ X = 700; Y = 405; T = 'Turnos'; D = 'Comprobante al cerrar atencion.'; C = '#22C55E' },
-        @{ X = 80; Y = 650; T = 'Pagos'; D = 'Factura vinculada al cobro.'; C = '#7C3AED' },
-        @{ X = 390; Y = 650; T = 'Backoffice'; D = 'IVA ventas, compras y control.'; C = '#F59E0B' },
-        @{ X = 700; Y = 650; T = 'Contingencia'; D = 'CAEA y reporte posterior.'; C = '#0B172A' }
+        @{ X = 80; Y = 405; T = 'SaaS'; D = 'Multiempresa / tenant.'; C = '#146EF5' },
+        @{ X = 390; Y = 405; T = (T 'ERP / Gesti{o}n'); D = (T 'Emisi{o}n integrada.'); C = '#00A6A6' },
+        @{ X = 700; Y = 405; T = "Turnos /`nServicios"; D = 'Cierre de servicio.'; C = '#22C55E' },
+        @{ X = 80; Y = 650; T = 'Pagos'; D = 'Factura vinculada.'; C = '#7C3AED' },
+        @{ X = 390; Y = 650; T = "Backoffice /`nReporting"; D = 'IVA y control.'; C = '#F59E0B' },
+        @{ X = 700; Y = 650; T = 'Contingencia'; D = 'CAEA y reporte.'; C = '#0B172A' }
     )
 
     foreach ($item in $items) {
         Draw-RoundRect $g $item.X $item.Y 270 190 26 '#FFFFFF' '#D8E1EC' 2
         Draw-RoundRect $g ($item.X + 28) ($item.Y + 28) 62 62 18 $item.C
-        Draw-Text $g $item.T 27 ([System.Drawing.FontStyle]::Bold) '#0B172A' ($item.X + 28) ($item.Y + 96) 218 36
-        Draw-Text $g $item.D 21 ([System.Drawing.FontStyle]::Regular) '#475569' ($item.X + 28) ($item.Y + 130) 218 54
+        Draw-Text $g $item.T 25 ([System.Drawing.FontStyle]::Bold) '#0B172A' ($item.X + 28) ($item.Y + 92) 218 58
+        Draw-Text $g $item.D 20 ([System.Drawing.FontStyle]::Regular) '#475569' ($item.X + 28) ($item.Y + 150) 218 32
     }
 
     Draw-RoundRect $g 160 908 760 62 20 '#0B172A'
     Draw-Text $g 'Una base fiscal integrable, auditable y mantenible.' 27 ([System.Drawing.FontStyle]::Bold) '#FFFFFF' 200 924 680 34 'Center'
+    Draw-Text $g 'Repositorio: github.com/Nixus32xD/apiArca' 22 ([System.Drawing.FontStyle]::Regular) '#64748B' 160 985 760 34 'Center'
 
     Save-Canvas $canvas.Bitmap $g (Join-Path $OutputDir 'slide-05-casos-de-uso.png')
 }
