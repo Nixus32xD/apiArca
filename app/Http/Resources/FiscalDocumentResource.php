@@ -55,7 +55,6 @@ class FiscalDocumentResource extends JsonResource
                 'report_deadline' => $this->caea_report_deadline?->toDateString(),
             ],
             'pdf' => [
-                'storage_key' => $this->pdf_storage_key,
                 'sha256' => $this->pdf_sha256,
                 'generated_at' => $this->pdf_generated_at?->toIso8601String(),
             ],

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class FiscalPurchase extends Model
 {
@@ -64,6 +65,13 @@ class FiscalPurchase extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::deleting(function (FiscalPurchase $purchase): void {
+            $purchase->deleteAttachmentFiles();
+        });
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(FiscalCompany::class, 'fiscal_company_id');
@@ -77,5 +85,15 @@ class FiscalPurchase extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(FiscalPurchaseAttachment::class);
+    }
+
+    private function deleteAttachmentFiles(): void
+    {
+        $this->loadMissing('attachments');
+        $disk = (string) config('fiscal.attachments.disk', 'local');
+
+        foreach ($this->attachments as $attachment) {
+            Storage::disk($disk)->delete($attachment->storage_key);
+        }
     }
 }

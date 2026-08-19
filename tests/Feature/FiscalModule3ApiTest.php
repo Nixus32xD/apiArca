@@ -1,11 +1,14 @@
 <?php
 
+use App\Jobs\SendFiscalDocumentEmailJob;
 use App\Models\AccessTicket;
 use App\Models\FiscalCompany;
 use App\Models\FiscalCredential;
 use App\Models\FiscalDocument;
 use App\Models\FiscalPurchase;
+use App\Models\FiscalPurchaseAttachment;
 use App\Services\Fiscal\Contracts\Wsfev1Client;
+use App\Services\Fiscal\FiscalDocumentPdfService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -20,6 +23,7 @@ beforeEach(function (): void {
         'fiscal.api_tokens' => ['test-token'],
         'fiscal.documents.disk' => 'local',
         'fiscal.attachments.disk' => 'local',
+        'fiscal.security.require_company_scope_for_id_routes' => false,
     ]);
 
     $this->wsfe = new class implements Wsfev1Client
@@ -137,6 +141,13 @@ it('generates official ARCA QR payload and deterministic PDF only for authorized
     expect($firstPdf)->toStartWith('%PDF')
         ->and(hash('sha256', $firstPdf))->toBe(hash('sha256', $secondPdf));
 
+    $this
+        ->withToken('test-token')
+        ->getJson("/api/fiscal/documents/{$documentId}?business_id={$company->external_business_id}")
+        ->assertOk()
+        ->assertJsonMissingPath('data.pdf.storage_key')
+        ->assertJsonPath('data.pdf.sha256', hash('sha256', $secondPdf));
+
     $draft = module3AuthorizedDocument($company, ['status' => 'draft', 'authorization_code' => null]);
 
     $this
@@ -180,6 +191,45 @@ it('queues fiscal document email and resends without issuing a new voucher', fun
 
     expect($this->wsfe->authorizeCalls)->toBe(1)
         ->and(FiscalDocument::query()->count())->toBe(1);
+});
+
+it('marks fiscal document email failures for queue retry without resending already sent emails', function (): void {
+    $company = module3FiscalCompany('business-email-retry');
+    $document = module3AuthorizedDocument($company, [
+        'email_to' => 'cliente@example.test',
+        'email_status' => 'pending',
+        'email_attempts' => 0,
+    ]);
+    $pdfService = Mockery::mock(FiscalDocumentPdfService::class);
+    $pdfService
+        ->shouldReceive('store')
+        ->once()
+        ->andThrow(new RuntimeException('transient pdf failure'));
+
+    $job = new SendFiscalDocumentEmailJob($document->id);
+
+    expect($job->tries)->toBe(3)
+        ->and($job->backoff())->toBe([60, 300])
+        ->and(fn () => $job->handle($pdfService))->toThrow(RuntimeException::class, 'transient pdf failure');
+
+    $document->refresh();
+
+    expect($document->email_status)->toBe('failed')
+        ->and($document->email_attempts)->toBe(1)
+        ->and($document->email_last_error)->toBe('transient pdf failure');
+
+    $sent = module3AuthorizedDocument($company, [
+        'email_to' => 'cliente@example.test',
+        'email_status' => 'sent',
+        'email_attempts' => 4,
+        'email_sent_at' => now(),
+    ]);
+    $sentPdfService = Mockery::mock(FiscalDocumentPdfService::class);
+    $sentPdfService->shouldNotReceive('store');
+
+    (new SendFiscalDocumentEmailJob($sent->id))->handle($sentPdfService);
+
+    expect($sent->refresh()->email_attempts)->toBe(4);
 });
 
 it('stores extended purchases with IVA 21 10.5 27 perceptions payment status and idempotency', function (): void {
@@ -274,17 +324,21 @@ it('handles private purchase attachments upload list download and delete', funct
         ->assertCreated()
         ->assertJsonPath('data.original_name', 'factura-proveedor.pdf')
         ->assertJsonPath('data.mime', 'application/pdf')
+        ->assertJsonMissingPath('data.storage_key')
         ->json('data');
 
-    Storage::disk('local')->assertExists($attachment['storage_key']);
-    expect($attachment['storage_key'])->toStartWith('fiscal-purchase-attachments/')
+    $attachmentModel = FiscalPurchaseAttachment::query()->findOrFail($attachment['id']);
+
+    Storage::disk('local')->assertExists($attachmentModel->storage_key);
+    expect($attachmentModel->storage_key)->toStartWith('fiscal-purchase-attachments/')
         ->and($attachment['sha256'])->toHaveLength(64);
 
     $this
         ->withToken('test-token')
         ->getJson("/api/fiscal/purchases/{$purchaseId}/attachments?business_id={$company->external_business_id}")
         ->assertOk()
-        ->assertJsonPath('data.0.id', $attachment['id']);
+        ->assertJsonPath('data.0.id', $attachment['id'])
+        ->assertJsonMissingPath('data.0.storage_key');
 
     $this
         ->withToken('test-token')
@@ -299,7 +353,38 @@ it('handles private purchase attachments upload list download and delete', funct
         ])
         ->assertNoContent();
 
-    Storage::disk('local')->assertMissing($attachment['storage_key']);
+    Storage::disk('local')->assertMissing($attachmentModel->storage_key);
+});
+
+it('deletes private attachment files when deleting a fiscal purchase', function (): void {
+    $company = module3FiscalCompany('business-purchase-delete');
+    $purchaseId = $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/purchases', module3PurchasePayload($company->external_business_id, ['idempotency_key' => 'purchase-delete-1']))
+        ->assertCreated()
+        ->json('data.id');
+
+    $attachmentId = $this
+        ->withToken('test-token')
+        ->post("/api/fiscal/purchases/{$purchaseId}/attachments", [
+            'business_id' => $company->external_business_id,
+            'file' => UploadedFile::fake()->create('factura-proveedor.pdf', 8, 'application/pdf'),
+        ])
+        ->assertCreated()
+        ->json('data.id');
+
+    $attachment = FiscalPurchaseAttachment::query()->findOrFail($attachmentId);
+    Storage::disk('local')->assertExists($attachment->storage_key);
+
+    $this
+        ->withToken('test-token')
+        ->deleteJson("/api/fiscal/purchases/{$purchaseId}", [
+            'business_id' => $company->external_business_id,
+        ])
+        ->assertNoContent();
+
+    Storage::disk('local')->assertMissing($attachment->storage_key);
+    expect(FiscalPurchaseAttachment::query()->whereKey($attachmentId)->exists())->toBeFalse();
 });
 
 it('returns IVA position payable credit and zero using the IVA book service totals', function (): void {
@@ -372,6 +457,49 @@ it('prevents scoped cross-company access for documents purchases and attachments
         ->getJson("/api/fiscal/purchases/{$purchase->id}/attachments/{$attachment->id}?business_id={$second->external_business_id}")
         ->assertForbidden()
         ->assertJsonPath('error_code', 'company_scope_mismatch');
+});
+
+it('prevents cross-company CAEA report and can require company scope on id routes', function (): void {
+    $first = module3FiscalCompany('business-caea-first');
+    $second = module3FiscalCompany('business-caea-second', ['cuit' => '20987654321']);
+
+    $documentId = $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/documents', module3FiscalPayload($first->external_business_id, [
+            'authorization_type' => 'CAEA',
+            'idempotency_key' => 'caea-scope-1',
+            'caea' => [
+                'code' => '12345678901234',
+                'report_now' => false,
+            ],
+        ]))
+        ->assertCreated()
+        ->assertJsonPath('data.fiscal_status', 'pending_report')
+        ->json('data.id');
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$documentId}/caea/report", [
+            'business_id' => $second->external_business_id,
+        ])
+        ->assertForbidden()
+        ->assertJsonPath('error_code', 'company_scope_mismatch');
+
+    config(['fiscal.security.require_company_scope_for_id_routes' => true]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$documentId}/caea/report")
+        ->assertStatus(422)
+        ->assertJsonPath('error_code', 'company_scope_required');
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$documentId}/caea/report", [
+            'business_id' => $first->external_business_id,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.fiscal_status', 'reported');
 });
 
 it('accepts appointment origin in documents and by-origin lookup', function (): void {
