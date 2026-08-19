@@ -107,6 +107,25 @@ return [
         'max_payload_chars' => (int) env('FISCAL_LOG_MAX_PAYLOAD_CHARS', 8000),
     ],
 
+    'documents' => [
+        'disk' => env('FISCAL_DOCUMENTS_DISK', 'local'),
+        'qr_url' => env('FISCAL_QR_URL', 'https://www.arca.gob.ar/fe/qr/'),
+        'qr_size' => (int) env('FISCAL_QR_SIZE', 180),
+    ],
+
+    'email' => [
+        'queue' => env('FISCAL_EMAIL_QUEUE', env('DB_QUEUE', 'default')),
+    ],
+
+    'attachments' => [
+        'disk' => env('FISCAL_ATTACHMENTS_DISK', 'local'),
+        'max_kb' => (int) env('FISCAL_ATTACHMENT_MAX_KB', 10240),
+    ],
+
+    'security' => [
+        'require_company_scope_for_id_routes' => (bool) env('FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES', false),
+    ],
+
     'environment' => [
         'strict_endpoint_check' => (bool) env('FISCAL_STRICT_ENDPOINT_ENV_CHECK', true),
     ],

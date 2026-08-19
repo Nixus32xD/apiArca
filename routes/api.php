@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Fiscal\FiscalAdminController;
 use App\Http\Controllers\Api\Fiscal\FiscalCaeaController;
 use App\Http\Controllers\Api\Fiscal\FiscalCompanyController;
 use App\Http\Controllers\Api\Fiscal\FiscalDocumentController;
+use App\Http\Controllers\Api\Fiscal\FiscalPurchaseAttachmentController;
 use App\Http\Controllers\Api\Fiscal\FiscalPurchaseController;
 use App\Http\Middleware\AuditFiscalApiRequest;
 use App\Http\Middleware\AuthenticateFiscalClient;
@@ -27,12 +28,29 @@ Route::prefix('fiscal')
         // frontend tenga que recalcular netos, IVA, totales ni alicuotas.
         Route::get('documents/iva-sales', [FiscalDocumentController::class, 'ivaSales']);
 
+        // Devuelve posicion estimada de IVA reutilizando Libro IVA Ventas y
+        // Compras: debito fiscal menos credito fiscal.
+        Route::get('iva/position', [FiscalDocumentController::class, 'ivaPosition']);
+
         // Busca comprobantes por origen estable del SaaS, por ejemplo
         // origin_type=appointment y origin_id=<id del turno>.
         Route::get('documents/by-origin', [FiscalDocumentController::class, 'byOrigin']);
 
         // Consulta el detalle local de un comprobante fiscal ya registrado.
         Route::get('documents/{document}', [FiscalDocumentController::class, 'show'])->whereNumber('document');
+
+        // Genera/regenera deterministicamente el PDF fiscal solo para
+        // comprobantes autorizados, con QR oficial ARCA.
+        Route::get('documents/{document}/pdf', [FiscalDocumentController::class, 'pdf'])->whereNumber('document');
+
+        // Expone payload, URL y SVG del QR oficial ARCA para comprobantes
+        // autorizados.
+        Route::get('documents/{document}/qr', [FiscalDocumentController::class, 'qr'])->whereNumber('document');
+
+        // Encola el envio/reenvio del comprobante fiscal autorizado por email
+        // sin volver a emitir ni reintentar WSFEv1.
+        Route::post('documents/{document}/email', [FiscalDocumentController::class, 'email'])->whereNumber('document');
+        Route::post('documents/{document}/email/resend', [FiscalDocumentController::class, 'email'])->whereNumber('document');
 
         // Reintenta una emision fallida o incierta. Si corresponde, concilia
         // primero contra ARCA para evitar duplicar numeros.
@@ -57,6 +75,12 @@ Route::prefix('fiscal')
 
         // Consulta el detalle de una compra cargada.
         Route::get('purchases/{purchase}', [FiscalPurchaseController::class, 'show'])->whereNumber('purchase');
+
+        // Adjuntos privados de compras/proveedores.
+        Route::get('purchases/{purchase}/attachments', [FiscalPurchaseAttachmentController::class, 'index'])->whereNumber('purchase');
+        Route::post('purchases/{purchase}/attachments', [FiscalPurchaseAttachmentController::class, 'store'])->whereNumber('purchase');
+        Route::get('purchases/{purchase}/attachments/{attachment}', [FiscalPurchaseAttachmentController::class, 'download'])->whereNumber('purchase')->whereNumber('attachment');
+        Route::delete('purchases/{purchase}/attachments/{attachment}', [FiscalPurchaseAttachmentController::class, 'destroy'])->whereNumber('purchase')->whereNumber('attachment');
 
         // Actualiza una compra y reemplaza su detalle de IVA por alicuota.
         Route::put('purchases/{purchase}', [FiscalPurchaseController::class, 'update'])->whereNumber('purchase');

@@ -7,8 +7,8 @@ use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use App\Models\FiscalPurchase;
 use App\Services\Fiscal\FiscalIvaBookService;
-use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 

@@ -24,6 +24,8 @@ class StoreFiscalPurchaseRequest extends FormRequest
             'origin.id' => ['nullable', 'string', 'max:120'],
             'origin_type' => ['nullable', 'string', 'in:purchase,manual'],
             'origin_id' => ['nullable', 'string', 'max:120'],
+            'category' => ['nullable', 'string', 'max:120'],
+            'concept' => ['nullable', 'string', 'max:255'],
             'voucher_date' => ['required', 'date'],
             'accounting_date' => ['nullable', 'date'],
             'cbte_type' => ['required', 'integer', 'min:1'],
@@ -54,7 +56,10 @@ class StoreFiscalPurchaseRequest extends FormRequest
             'currency_rate' => ['nullable', 'numeric', 'gt:0'],
             'payment_method' => ['nullable', 'string', 'in:cash,efectivo,transfer,transferencia,bank_transfer,debit_card,debito,credit_card,credito,other,otro'],
             'payment_reference' => ['nullable', 'string', 'max:120'],
+            'payment_status' => ['nullable', 'string', 'in:paid,pending'],
+            'due_date' => ['nullable', 'date'],
             'associated_vouchers' => ['nullable', 'array'],
+            'idempotency_key' => ['nullable', 'string', 'max:120'],
             'metadata' => ['nullable', 'array'],
         ];
     }
