@@ -10,6 +10,7 @@ use App\Http\Resources\FiscalDocumentResource;
 use App\Models\FiscalDocument;
 use App\Services\Fiscal\FiscalCaeaService;
 use App\Services\Fiscal\FiscalCompanyResolver;
+use App\Services\Fiscal\FiscalRecordScopeGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -19,6 +20,7 @@ class FiscalCaeaController extends Controller
     public function __construct(
         private readonly FiscalCompanyResolver $companyResolver,
         private readonly FiscalCaeaService $caeaService,
+        private readonly FiscalRecordScopeGuard $scopeGuard,
     ) {}
 
     public function request(RequestFiscalCaeaRequest $request, string $company): JsonResponse
@@ -68,6 +70,9 @@ class FiscalCaeaController extends Controller
     public function report(Request $request, FiscalDocument $document): JsonResponse
     {
         try {
+            $document->loadMissing('company');
+            $this->scopeGuard->ensureCompanyMatches($request, $document->company);
+
             $result = $this->caeaService->reportDocument($document, $this->traceId($request));
             $resource = new FiscalDocumentResource($result['document']->load(['company', 'ivaItems', 'attempts', 'events']));
 

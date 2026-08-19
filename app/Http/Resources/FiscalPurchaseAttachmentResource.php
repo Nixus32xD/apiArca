@@ -18,7 +18,6 @@ class FiscalPurchaseAttachmentResource extends JsonResource
             'original_name' => $this->original_name,
             'mime' => $this->mime,
             'size' => $this->size,
-            'storage_key' => $this->storage_key,
             'sha256' => $this->sha256,
             'uploaded_at' => $this->uploaded_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),

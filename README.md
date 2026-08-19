@@ -79,6 +79,7 @@ FISCAL_CONSUMER_FINAL_TAX_CONDITION_ID=5
 FISCAL_DEFAULT_IVA_ID=5
 FISCAL_DOCUMENTS_DISK=local
 FISCAL_QR_URL=https://www.arca.gob.ar/fe/qr/
+FISCAL_QR_SIZE=180
 FISCAL_EMAIL_QUEUE=default
 FISCAL_ATTACHMENTS_DISK=local
 FISCAL_ATTACHMENT_MAX_KB=10240
@@ -100,6 +101,26 @@ OPENSSL_CONF=/ruta/al/openssl.cnf
 ```
 
 `FISCAL_OPENSSL_CONF` se usa como ruta de configuracion para operaciones OpenSSL de la aplicacion, como generacion de CSR y firma CMS/WSAA. No modifica por si sola el handshake TLS de cURL/Guzzle usado para WSFEv1; para eso debe estar configurado `OPENSSL_CONF` en el entorno del proceso PHP antes de iniciar la app.
+
+## Docker y operacion
+
+La imagen PHP debe incluir extensiones para Laravel y ARCA: `pdo_mysql`, `openssl`, `soap`, `curl`, `mbstring`, `xml`, `dom`, `fileinfo`, `ctype`, `json` y `tokenizer`. Para correr tests con la configuracion PHPUnit por defecto tambien se requiere `pdo_sqlite`.
+
+Procesos recomendados en Docker:
+
+- App HTTP: PHP-FPM o `php artisan serve` segun el entorno.
+- Worker: `php artisan queue:work --queue=${FISCAL_EMAIL_QUEUE:-default}` para envios de comprobantes por email.
+- Scheduler: `php artisan schedule:run` si se usa reporte automatico de CAEA.
+
+`FISCAL_DOCUMENTS_DISK` y `FISCAL_ATTACHMENTS_DISK` deben apuntar a storage privado. No publicar esos paths con el web server ni exponerlos por `storage:link`; el acceso real es por endpoints autenticados (`/pdf` y `/attachments/{attachment}`).
+
+Para email real configurar `MAIL_MAILER`, host, puerto, credenciales y remitente. `MAIL_MAILER=log` sirve solo para desarrollo. Si el envio falla, el job marca `failed`, conserva el ultimo error y la cola reintenta; no se vuelve a emitir el comprobante fiscal.
+
+En deploys nuevos o al traer cambios de migraciones, correr `php artisan migrate --force`. Ademas se deben cargar o actualizar las empresas fiscales (`fiscal_companies`), sus credenciales/certificados ARCA y defaults operativos antes de emitir comprobantes.
+
+## Integracion recomendada
+
+El frontend no deberia llamar directo a esta API fiscal. Flujo recomendado: Frontend -> backend del producto (.NET u otro) -> API Laravel ARCA. El backend del producto valida permisos y negocio, genera una `idempotency_key` estable, envia `Authorization: Bearer ...` y siempre incluye `business_id`/`external_business_id` en rutas por id.
 
 ## Autenticacion
 
@@ -148,6 +169,10 @@ Authorization: Bearer token-largo-random
 | `GET` | `/api/fiscal/companies/{company}/status` | Ver estado local de empresa, credencial y ticket WSAA. |
 | `GET` | `/api/fiscal/companies/{company}/diagnostics` | Ejecutar diagnosticos de empresa, certificado, WSAA y WSFEv1. |
 | `POST` | `/api/fiscal/companies/{company}/credentials/test` | Validar credenciales contra WSAA y `FEDummy`. |
+| `POST` | `/api/fiscal/companies/{company}/caea/request` | Solicitar CAEA para periodo/quincena. |
+| `GET` | `/api/fiscal/companies/{company}/caea/consult` | Consultar CAEA en ARCA. |
+| `POST` | `/api/fiscal/companies/{company}/caea/without-movement` | Informar periodo CAEA sin movimiento. |
+| `GET` | `/api/fiscal/companies/{company}/caea/without-movement` | Consultar informe CAEA sin movimiento. |
 | `POST` | `/api/fiscal/documents` | Emitir comprobante fiscal. |
 | `GET` | `/api/fiscal/documents/iva-sales` | Libro IVA Ventas por empresa y periodo. |
 | `GET` | `/api/fiscal/iva/position` | Posicion IVA estimada por empresa y periodo. |
@@ -159,6 +184,7 @@ Authorization: Bearer token-largo-random
 | `GET` | `/api/fiscal/documents/by-origin` | Buscar comprobantes por origen (`sale`, `payment`, `manual`, `appointment`). |
 | `POST` | `/api/fiscal/documents/{document}/retry` | Reintentar emision de forma segura. |
 | `POST` | `/api/fiscal/documents/{document}/reconcile` | Conciliar el comprobante contra ARCA. |
+| `POST` | `/api/fiscal/documents/{document}/caea/report` | Informar a ARCA un comprobante CAEA pendiente. |
 | `GET` | `/api/fiscal/purchases` | Listar comprobantes de proveedores. |
 | `POST` | `/api/fiscal/purchases` | Cargar comprobante de proveedor. |
 | `GET` | `/api/fiscal/purchases/iva-book` | Libro IVA Compras por empresa y periodo. |
@@ -470,7 +496,43 @@ Respuesta:
 }
 ```
 
-El envio corre en `SendFiscalDocumentEmailJob`. Si falla, queda `failed` con `email_last_error`; un reenvio vuelve a encolar el mismo comprobante y nunca reemite ni llama a ARCA.
+El envio corre en `SendFiscalDocumentEmailJob` con hasta 3 intentos y backoff. Si falla, queda `failed` con `email_last_error`; la cola puede reintentar el mismo job y un reenvio manual vuelve a encolar el mismo comprobante. Si ya esta `sent`, un retry automatico no vuelve a enviarlo. Nunca reemite ni llama a ARCA.
+
+Reporte CAEA pendiente:
+
+```http
+POST /api/fiscal/documents/10/caea/report
+Authorization: Bearer token-largo-random
+Content-Type: application/json
+```
+
+```json
+{
+  "business_id": "tenant-123"
+}
+```
+
+Respuesta:
+
+```json
+{
+  "data": {
+    "id": 10,
+    "business_id": "tenant-123",
+    "status": "authorized",
+    "fiscal_status": "reported",
+    "authorization_type": "CAEA",
+    "authorization_code": "12345678901234"
+  },
+  "meta": {
+    "raw_response": {
+      "Resultado": "A"
+    }
+  }
+}
+```
+
+En integraciones nuevas enviar siempre `business_id`, `external_business_id`, `X-Fiscal-Business-Id` o `X-Fiscal-Company-Id` en rutas por id. Con `FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=true`, la API responde `422 company_scope_required` si falta ese scope.
 
 ## Consulta por origen
 
@@ -620,7 +682,6 @@ Respuesta:
     "original_name": "factura-proveedor.pdf",
     "mime": "application/pdf",
     "size": 12345,
-    "storage_key": "fiscal-purchase-attachments/1/55/550e8400-e29b-41d4-a716-446655440000.pdf",
     "sha256": "4c8f4f0d9c2d4e0d0c5a58f16c8f14c742a9fd7d6c995e0f9f8e3c8cc7b0df52",
     "uploaded_at": "2026-08-19T10:00:00-03:00"
   }
@@ -635,7 +696,7 @@ GET /api/fiscal/purchases/55/attachments/9?business_id=tenant-123
 DELETE /api/fiscal/purchases/55/attachments/9
 ```
 
-Se aceptan PDF, JPG, JPEG y PNG. Los archivos se guardan en `FISCAL_ATTACHMENTS_DISK` y no quedan servidos por path publico directo.
+Se aceptan PDF, JPG, JPEG y PNG. Los archivos se guardan en `FISCAL_ATTACHMENTS_DISK`, no quedan servidos por path publico directo y el `storage_key` interno no se expone en resources publicos. Al eliminar una compra tambien se eliminan del disk sus archivos adjuntos.
 
 Libro IVA Compras:
 

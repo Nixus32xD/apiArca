@@ -22,15 +22,30 @@ class SendFiscalDocumentEmailJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    public int $tries = 3;
+
     public function __construct(
         public readonly int $documentId,
     ) {
         $this->onQueue((string) config('fiscal.email.queue', 'default'));
     }
 
+    /**
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return [60, 300];
+    }
+
     public function handle(FiscalDocumentPdfService $pdfService): void
     {
         $document = FiscalDocument::query()->with(['company', 'ivaItems'])->findOrFail($this->documentId);
+
+        if ($document->email_status === 'sent') {
+            return;
+        }
+
         $document->increment('email_attempts');
         $document->refresh();
 
@@ -65,6 +80,8 @@ class SendFiscalDocumentEmailJob implements ShouldQueue
             ])->save();
 
             report($exception);
+
+            throw $exception;
         }
     }
 
