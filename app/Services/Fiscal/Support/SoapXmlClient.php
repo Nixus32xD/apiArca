@@ -51,7 +51,7 @@ class SoapXmlClient
                 ->withHeaders(array_filter([
                     'SOAPAction' => $soapAction,
                     'Content-Type' => 'text/xml; charset=utf-8',
-                ], fn($value) => $value !== null))
+                ], fn ($value) => $value !== null))
                 ->withBody($envelope, 'text/xml; charset=utf-8')
                 ->post($endpoint);
 
@@ -105,8 +105,8 @@ class SoapXmlClient
             );
 
             throw new FiscalException(
-                'Timeout al conectar con ARCA durante la operación ' . $operation . '. '
-                    . 'No se recibió respuesta dentro del tiempo configurado.',
+                'Timeout al conectar con ARCA durante la operación '.$operation.'. '
+                    .'No se recibió respuesta dentro del tiempo configurado.',
                 504,
                 'arca_timeout',
                 [
@@ -162,15 +162,15 @@ class SoapXmlClient
     private function envelope(string $operation, string $namespace, string $bodyXml): string
     {
         return '<?xml version="1.0" encoding="utf-8"?>'
-            . '<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-            . 'xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
-            . 'xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
-            . '<soap:Body>'
-            . '<' . $operation . ' xmlns="' . $this->escape($namespace) . '">'
-            . $bodyXml
-            . '</' . $operation . '>'
-            . '</soap:Body>'
-            . '</soap:Envelope>';
+            .'<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+            .'xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+            .'xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+            .'<soap:Body>'
+            .'<'.$operation.' xmlns="'.$this->escape($namespace).'">'
+            .$bodyXml
+            .'</'.$operation.'>'
+            .'</soap:Body>'
+            .'</soap:Envelope>';
     }
 
     /**
@@ -191,7 +191,7 @@ class SoapXmlClient
     {
         $global = config('fiscal.soap', []);
         $operation = is_string($profile) && $profile !== ''
-            ? config('fiscal.soap.operations.' . $profile, [])
+            ? config('fiscal.soap.operations.'.$profile, [])
             : [];
 
         return [

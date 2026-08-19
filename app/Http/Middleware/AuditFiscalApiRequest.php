@@ -6,6 +6,7 @@ use App\Models\FiscalApiLog;
 use App\Models\FiscalCompany;
 use Closure;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -69,6 +70,16 @@ class AuditFiscalApiRequest
 
     private function sanitize(mixed $payload): mixed
     {
+        if ($payload instanceof UploadedFile) {
+            return [
+                'uploaded_file' => [
+                    'name' => $payload->getClientOriginalName(),
+                    'mime' => $payload->getClientMimeType(),
+                    'size' => $payload->getSize(),
+                ],
+            ];
+        }
+
         if (! is_array($payload)) {
             return $payload;
         }
@@ -105,7 +116,11 @@ class AuditFiscalApiRequest
 
         $decoded = json_decode($content, true);
 
-        return is_array($decoded) ? $this->sanitize($decoded) : $content;
+        if (is_array($decoded)) {
+            return $this->sanitize($decoded);
+        }
+
+        return ['non_json_response' => $response->headers->get('content-type') ?: 'unknown'];
     }
 
     private function summarize(mixed $payload): ?array

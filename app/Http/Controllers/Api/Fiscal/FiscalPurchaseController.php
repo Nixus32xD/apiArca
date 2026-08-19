@@ -11,7 +11,9 @@ use App\Models\FiscalPurchase;
 use App\Services\Fiscal\FiscalAmountValidator;
 use App\Services\Fiscal\FiscalCompanyResolver;
 use App\Services\Fiscal\FiscalIvaBookService;
+use App\Services\Fiscal\FiscalRecordScopeGuard;
 use App\Services\Fiscal\FiscalVoucherResolver;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -24,6 +26,7 @@ class FiscalPurchaseController extends Controller
         private readonly FiscalCompanyResolver $companyResolver,
         private readonly FiscalAmountValidator $amountValidator,
         private readonly FiscalIvaBookService $ivaBookService,
+        private readonly FiscalRecordScopeGuard $scopeGuard,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection|JsonResponse
@@ -61,11 +64,12 @@ class FiscalPurchaseController extends Controller
     public function store(StoreFiscalPurchaseRequest $request): JsonResponse
     {
         try {
-            $purchase = $this->persist(new FiscalPurchase, $request->validated());
+            $result = $this->persistWithIdempotency($request->validated());
 
-            return (new FiscalPurchaseResource($purchase->load(['company', 'ivaItems'])))
+            return (new FiscalPurchaseResource($result['purchase']->load(['company', 'ivaItems'])))
+                ->additional(['meta' => ['idempotent_replay' => $result['idempotent_replay']]])
                 ->response()
-                ->setStatusCode(201);
+                ->setStatusCode($result['idempotent_replay'] ? 200 : 201);
         } catch (FiscalException $exception) {
             return $this->fiscalError($exception);
         } catch (Throwable $exception) {
@@ -73,14 +77,24 @@ class FiscalPurchaseController extends Controller
         }
     }
 
-    public function show(FiscalPurchase $purchase): FiscalPurchaseResource
+    public function show(Request $request, FiscalPurchase $purchase): FiscalPurchaseResource|JsonResponse
     {
-        return new FiscalPurchaseResource($purchase->load(['company', 'ivaItems']));
+        try {
+            $purchase->loadMissing('company');
+            $this->scopeGuard->ensureCompanyMatches($request, $purchase->company);
+
+            return new FiscalPurchaseResource($purchase->load(['company', 'ivaItems', 'attachments']));
+        } catch (FiscalException $exception) {
+            return $this->fiscalError($exception);
+        }
     }
 
     public function update(StoreFiscalPurchaseRequest $request, FiscalPurchase $purchase): FiscalPurchaseResource|JsonResponse
     {
         try {
+            $purchase->loadMissing('company');
+            $this->scopeGuard->ensureCompanyMatches($request, $purchase->company);
+
             return new FiscalPurchaseResource($this->persist($purchase, $request->validated())->load(['company', 'ivaItems']));
         } catch (FiscalException $exception) {
             return $this->fiscalError($exception);
@@ -89,8 +103,15 @@ class FiscalPurchaseController extends Controller
         }
     }
 
-    public function destroy(FiscalPurchase $purchase): JsonResponse
+    public function destroy(Request $request, FiscalPurchase $purchase): JsonResponse
     {
+        try {
+            $purchase->loadMissing('company');
+            $this->scopeGuard->ensureCompanyMatches($request, $purchase->company);
+        } catch (FiscalException $exception) {
+            return $this->fiscalError($exception);
+        }
+
         $purchase->delete();
 
         return response()->json(null, 204);
@@ -110,6 +131,51 @@ class FiscalPurchaseController extends Controller
             ]);
         } catch (FiscalException $exception) {
             return $this->fiscalError($exception);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{purchase: FiscalPurchase, idempotent_replay: bool}
+     */
+    private function persistWithIdempotency(array $data): array
+    {
+        $company = $this->companyResolver->fromPayload($data);
+        $idempotencyKey = isset($data['idempotency_key']) ? trim((string) $data['idempotency_key']) : '';
+
+        if ($idempotencyKey === '') {
+            return [
+                'purchase' => $this->persist(new FiscalPurchase, $data),
+                'idempotent_replay' => false,
+            ];
+        }
+
+        $payloadHash = $this->payloadHash($data);
+        $existing = $company->purchases()->where('idempotency_key', $idempotencyKey)->first();
+
+        if ($existing) {
+            $this->assertCompatibleIdempotencyPayload($existing, $payloadHash);
+
+            return ['purchase' => $existing->refresh(), 'idempotent_replay' => true];
+        }
+
+        $data['idempotency_payload_hash'] = $payloadHash;
+
+        try {
+            return [
+                'purchase' => $this->persist(new FiscalPurchase, $data),
+                'idempotent_replay' => false,
+            ];
+        } catch (QueryException) {
+            $existing = $company->purchases()->where('idempotency_key', $idempotencyKey)->first();
+
+            if ($existing) {
+                $this->assertCompatibleIdempotencyPayload($existing, $payloadHash);
+
+                return ['purchase' => $existing->refresh(), 'idempotent_replay' => true];
+            }
+
+            throw new FiscalException('Could not persist fiscal purchase.', 500, 'purchase_persist_failed');
         }
     }
 
@@ -140,6 +206,8 @@ class FiscalPurchaseController extends Controller
                 'fiscal_company_id' => $company->id,
                 'origin_type' => data_get($data, 'origin.type') ?? ($data['origin_type'] ?? 'manual'),
                 'origin_id' => data_get($data, 'origin.id') ?? ($data['origin_id'] ?? null),
+                'category' => $data['category'] ?? null,
+                'concept' => $data['concept'] ?? null,
                 'voucher_date' => $data['voucher_date'],
                 'accounting_date' => $data['accounting_date'] ?? null,
                 'voucher_type' => $voucherType,
@@ -159,7 +227,12 @@ class FiscalPurchaseController extends Controller
                 'currency_rate' => $this->decimal($data['currency_rate'] ?? config('fiscal.defaults.currency_rate', 1), 6),
                 'payment_method' => $this->paymentMethod($data['payment_method'] ?? null),
                 'payment_reference' => $data['payment_reference'] ?? null,
+                'payment_status' => $data['payment_status'] ?? 'pending',
+                'due_date' => $data['due_date'] ?? null,
                 'associated_vouchers' => $associatedVouchers,
+                'trib_items' => $amounts['trib_items'],
+                'idempotency_key' => $data['idempotency_key'] ?? null,
+                'idempotency_payload_hash' => $data['idempotency_payload_hash'] ?? null,
                 'metadata' => $data['metadata'] ?? null,
             ])->save();
 
@@ -288,6 +361,42 @@ class FiscalPurchaseController extends Controller
     private function decimal(mixed $value, int $scale = 2): string
     {
         return number_format((float) $value, $scale, '.', '');
+    }
+
+    private function assertCompatibleIdempotencyPayload(FiscalPurchase $purchase, string $payloadHash): void
+    {
+        if ($purchase->idempotency_payload_hash === null || hash_equals((string) $purchase->idempotency_payload_hash, $payloadHash)) {
+            return;
+        }
+
+        throw new FiscalException('Idempotency key already exists with an incompatible purchase payload.', 409, 'idempotency_payload_conflict');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function payloadHash(array $data): string
+    {
+        unset($data['business_id'], $data['external_business_id'], $data['idempotency_key'], $data['idempotency_payload_hash']);
+        $this->sortRecursive($data);
+
+        return hash('sha256', (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    /**
+     * @param  array<string|int, mixed>  $data
+     */
+    private function sortRecursive(array &$data): void
+    {
+        foreach ($data as &$value) {
+            if (is_array($value)) {
+                $this->sortRecursive($value);
+            }
+        }
+
+        if (! array_is_list($data)) {
+            ksort($data);
+        }
     }
 
     private function fiscalError(FiscalException $exception): JsonResponse

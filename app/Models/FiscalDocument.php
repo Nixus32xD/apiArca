@@ -57,6 +57,14 @@ class FiscalDocument extends Model
         'observations',
         'metadata',
         'processed_at',
+        'pdf_storage_key',
+        'pdf_sha256',
+        'pdf_generated_at',
+        'email_to',
+        'email_status',
+        'email_attempts',
+        'email_sent_at',
+        'email_last_error',
     ];
 
     protected function casts(): array
@@ -92,6 +100,9 @@ class FiscalDocument extends Model
             'observations' => 'array',
             'metadata' => 'array',
             'processed_at' => 'datetime',
+            'pdf_generated_at' => 'datetime',
+            'email_attempts' => 'integer',
+            'email_sent_at' => 'datetime',
         ];
     }
 

@@ -22,6 +22,9 @@ despliegues en contenedores, ver [docs/docker-deployment.md](docs/docker-deploym
 - Facturas, notas de credito y notas de debito A/B/C.
 - Exposicion de importes e IVA por alicuota para Libro IVA Ventas.
 - Carga manual de comprobantes de proveedores para Libro IVA Compras.
+- PDF fiscal regenerable, QR oficial ARCA y envio por email en Queue.
+- Adjuntos privados para compras/proveedores.
+- Posicion IVA estimada por periodo reutilizando libros IVA.
 - Consulta de actividades, puntos de venta, estado y diagnostico fiscal.
 - Reintento seguro y conciliacion de comprobantes con estado incierto.
 - Auditoria inbound/outbound con payloads resumidos y sanitizados.
@@ -74,6 +77,12 @@ FISCAL_CONSUMER_FINAL_DOC_TYPE=99
 FISCAL_CONSUMER_FINAL_DOC_NUMBER=0
 FISCAL_CONSUMER_FINAL_TAX_CONDITION_ID=5
 FISCAL_DEFAULT_IVA_ID=5
+FISCAL_DOCUMENTS_DISK=local
+FISCAL_QR_URL=https://www.arca.gob.ar/fe/qr/
+FISCAL_EMAIL_QUEUE=default
+FISCAL_ATTACHMENTS_DISK=local
+FISCAL_ATTACHMENT_MAX_KB=10240
+FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=false
 FISCAL_ADMIN_ENABLED=false
 FISCAL_ADMIN_TOKEN=
 ```
@@ -141,13 +150,22 @@ Authorization: Bearer token-largo-random
 | `POST` | `/api/fiscal/companies/{company}/credentials/test` | Validar credenciales contra WSAA y `FEDummy`. |
 | `POST` | `/api/fiscal/documents` | Emitir comprobante fiscal. |
 | `GET` | `/api/fiscal/documents/iva-sales` | Libro IVA Ventas por empresa y periodo. |
+| `GET` | `/api/fiscal/iva/position` | Posicion IVA estimada por empresa y periodo. |
 | `GET` | `/api/fiscal/documents/{document}` | Obtener un comprobante por id interno. |
-| `GET` | `/api/fiscal/documents/by-origin` | Buscar comprobantes por origen (`sale`, `payment`, `manual`). |
+| `GET` | `/api/fiscal/documents/{document}/pdf` | Generar/regenerar PDF fiscal autorizado. |
+| `GET` | `/api/fiscal/documents/{document}/qr` | Obtener URL, payload y SVG del QR oficial ARCA. |
+| `POST` | `/api/fiscal/documents/{document}/email` | Encolar envio del comprobante por email. |
+| `POST` | `/api/fiscal/documents/{document}/email/resend` | Reenviar sin reemitir el comprobante. |
+| `GET` | `/api/fiscal/documents/by-origin` | Buscar comprobantes por origen (`sale`, `payment`, `manual`, `appointment`). |
 | `POST` | `/api/fiscal/documents/{document}/retry` | Reintentar emision de forma segura. |
 | `POST` | `/api/fiscal/documents/{document}/reconcile` | Conciliar el comprobante contra ARCA. |
 | `GET` | `/api/fiscal/purchases` | Listar comprobantes de proveedores. |
 | `POST` | `/api/fiscal/purchases` | Cargar comprobante de proveedor. |
 | `GET` | `/api/fiscal/purchases/iva-book` | Libro IVA Compras por empresa y periodo. |
+| `GET` | `/api/fiscal/purchases/{purchase}/attachments` | Listar adjuntos privados. |
+| `POST` | `/api/fiscal/purchases/{purchase}/attachments` | Subir PDF/JPG/JPEG/PNG privado. |
+| `GET` | `/api/fiscal/purchases/{purchase}/attachments/{attachment}` | Descargar adjunto autenticado. |
+| `DELETE` | `/api/fiscal/purchases/{purchase}/attachments/{attachment}` | Eliminar adjunto. |
 | `PUT` | `/api/fiscal/purchases/{purchase}` | Actualizar comprobante de proveedor. |
 | `DELETE` | `/api/fiscal/purchases/{purchase}` | Eliminar comprobante de proveedor. |
 
@@ -371,6 +389,89 @@ Respuesta de ejemplo:
 
 Si se repite la misma `idempotency_key` para la misma empresa, la API devuelve el comprobante existente con `meta.idempotent_replay=true` y no llama de nuevo a ARCA.
 
+## PDF, QR y email fiscal
+
+El PDF y el QR solo se generan para comprobantes `authorized`. No se llama a WSFEv1 ni se emite nuevamente; se usan los datos locales ya autorizados.
+
+QR oficial ARCA:
+
+```http
+GET /api/fiscal/documents/10/qr?business_id=tenant-123
+Authorization: Bearer token-largo-random
+```
+
+Respuesta:
+
+```json
+{
+  "data": {
+    "url": "https://www.arca.gob.ar/fe/qr/?p=eyJ2ZXIiOjEsImZlY2hhIjoiMjAyNi0wOC0xOSIsImN1aXQiOjIwMTIzNDU2Nzg5LCJwdG9WdGEiOjEsInRpcG9DbXAiOjEsIm5yb0NtcCI6MTEsImltcG9ydGUiOjEyMSwibW9uZWRhIjoiUEVTIiwiY3R6IjoxLCJ0aXBvQ29kQXV0IjoiRSIsImNvZEF1dCI6MTIzNDU2Nzg5MDEyMzQsInRpcG9Eb2NSZWMiOjgwLCJucm9Eb2NSZWMiOjMwNzEyMzQ1NjcxfQ==",
+    "payload": {
+      "ver": 1,
+      "fecha": "2026-08-19",
+      "cuit": 20123456789,
+      "ptoVta": 1,
+      "tipoCmp": 1,
+      "nroCmp": 11,
+      "importe": 121,
+      "moneda": "PES",
+      "ctz": 1,
+      "tipoCodAut": "E",
+      "codAut": 12345678901234,
+      "tipoDocRec": 80,
+      "nroDocRec": 30712345671
+    },
+    "svg": "<svg ...></svg>"
+  }
+}
+```
+
+La especificacion usada es la publicada por ARCA para comprobantes electronicos: URL `https://www.arca.gob.ar/fe/qr/`, parametro `p` y JSON version 1 codificado en Base64.
+
+PDF fiscal:
+
+```http
+GET /api/fiscal/documents/10/pdf?business_id=tenant-123
+Authorization: Bearer token-largo-random
+Accept: application/pdf
+```
+
+Devuelve `application/pdf` y guarda una copia privada en `FISCAL_DOCUMENTS_DISK`. El PDF incluye emisor, receptor, tipo/numero, punto de venta, importes, IVA, tributos/percepciones, fecha, CAE/CAEA, vencimiento y QR.
+
+Envio por email:
+
+```http
+POST /api/fiscal/documents/10/email/resend
+Authorization: Bearer token-largo-random
+Content-Type: application/json
+```
+
+```json
+{
+  "business_id": "tenant-123",
+  "email": "cliente@example.com"
+}
+```
+
+Respuesta:
+
+```json
+{
+  "data": {
+    "id": 10,
+    "email": {
+      "to": "cliente@example.com",
+      "status": "pending",
+      "attempts": 0,
+      "sent_at": null,
+      "last_error": null
+    }
+  }
+}
+```
+
+El envio corre en `SendFiscalDocumentEmailJob`. Si falla, queda `failed` con `email_last_error`; un reenvio vuelve a encolar el mismo comprobante y nunca reemite ni llama a ARCA.
+
 ## Consulta por origen
 
 ```http
@@ -378,7 +479,7 @@ GET /api/fiscal/documents/by-origin?business_id=tenant-123&origin_type=sale&orig
 Authorization: Bearer token-largo-random
 ```
 
-`origin_type` acepta `sale`, `payment` o `manual`. La respuesta devuelve hasta 50 comprobantes ordenados por fecha descendente.
+`origin_type` acepta `sale`, `payment`, `manual` o `appointment`. La respuesta devuelve hasta 50 comprobantes ordenados por fecha descendente.
 
 ## IVA Compras
 
@@ -393,7 +494,14 @@ Content-Type: application/json
 ```json
 {
   "business_id": "tenant-123",
+  "origin": {
+    "type": "purchase",
+    "id": "purchase-1000"
+  },
+  "category": "insumos",
+  "concept": "Productos profesionales",
   "voucher_date": "2026-04-10",
+  "accounting_date": "2026-04-10",
   "cbte_type": 1,
   "point_of_sale": 2,
   "document_number": 123,
@@ -403,15 +511,131 @@ Content-Type: application/json
     "iva_condition": "responsable_inscripto"
   },
   "amounts": {
-    "imp_total": 121,
-    "imp_neto": 100,
-    "imp_iva": 21,
+    "imp_total": 363.5,
+    "imp_neto": 300,
+    "imp_iva": 58.5,
+    "imp_trib": 5,
+    "imp_op_ex": 0,
+    "imp_tot_conc": 0,
     "iva_items": [
-      { "id": 5, "base_imp": 100, "importe": 21 }
+      { "id": 5, "base_imp": 100, "importe": 21 },
+      { "id": 4, "base_imp": 100, "importe": 10.5 },
+      { "id": 6, "base_imp": 100, "importe": 27 }
+    ],
+    "trib_items": [
+      {
+        "id": 99,
+        "desc": "Percepcion IIBB",
+        "base_imp": 300,
+        "alic": 1.6667,
+        "importe": 5
+      }
     ]
+  },
+  "payment_method": "transferencia",
+  "payment_status": "paid",
+  "due_date": "2026-04-30",
+  "idempotency_key": "supplier-30712345671-a-2-123"
+}
+```
+
+Respuesta:
+
+```json
+{
+  "data": {
+    "id": 55,
+    "business_id": "tenant-123",
+    "category": "insumos",
+    "concept": "Productos profesionales",
+    "voucher_date": "2026-04-10",
+    "cbte_type": 1,
+    "point_of_sale": 2,
+    "number": 123,
+    "supplier": {
+      "cuit": "30712345671",
+      "name": "Proveedor SA",
+      "iva_condition": "responsable_inscripto"
+    },
+    "amounts": {
+      "imp_total": "363.50",
+      "imp_neto": "300.00",
+      "imp_iva": "58.50",
+      "imp_trib": "5.00",
+      "iva_items": [
+        { "id": 4, "rate": "10.50", "base_imp": "100.00", "importe": "10.50" },
+        { "id": 5, "rate": "21.00", "base_imp": "100.00", "importe": "21.00" },
+        { "id": 6, "rate": "27.00", "base_imp": "100.00", "importe": "27.00" }
+      ],
+      "trib_items": [
+        { "Id": 99, "Desc": "Percepcion IIBB", "BaseImp": "300.00", "Alic": "1.67", "Importe": "5.00" }
+      ]
+    },
+    "payment": {
+      "method": "bank_transfer",
+      "reference": null,
+      "status": "paid",
+      "due_date": "2026-04-30"
+    },
+    "idempotency_key": "supplier-30712345671-a-2-123"
+  },
+  "meta": {
+    "idempotent_replay": false
   }
 }
 ```
+
+Si `POST /api/fiscal/purchases` recibe la misma `idempotency_key` para la misma empresa y el mismo payload operativo, devuelve la compra existente con `meta.idempotent_replay=true`. Si el payload cambia, responde `409 idempotency_payload_conflict` y no duplica la compra.
+
+Los totales se validan como:
+
+```text
+imp_total = imp_neto + imp_iva + imp_trib + imp_op_ex + imp_tot_conc
+```
+
+`imp_trib` debe coincidir con `amounts.trib_items`, que puede representar percepciones.
+
+Adjuntos privados de compras:
+
+```http
+POST /api/fiscal/purchases/55/attachments
+Authorization: Bearer token-largo-random
+Content-Type: multipart/form-data
+```
+
+Campos:
+
+```text
+business_id=tenant-123
+file=@factura-proveedor.pdf
+```
+
+Respuesta:
+
+```json
+{
+  "data": {
+    "id": 9,
+    "purchase_id": 55,
+    "original_name": "factura-proveedor.pdf",
+    "mime": "application/pdf",
+    "size": 12345,
+    "storage_key": "fiscal-purchase-attachments/1/55/550e8400-e29b-41d4-a716-446655440000.pdf",
+    "sha256": "4c8f4f0d9c2d4e0d0c5a58f16c8f14c742a9fd7d6c995e0f9f8e3c8cc7b0df52",
+    "uploaded_at": "2026-08-19T10:00:00-03:00"
+  }
+}
+```
+
+Tambien disponibles:
+
+```http
+GET /api/fiscal/purchases/55/attachments?business_id=tenant-123
+GET /api/fiscal/purchases/55/attachments/9?business_id=tenant-123
+DELETE /api/fiscal/purchases/55/attachments/9
+```
+
+Se aceptan PDF, JPG, JPEG y PNG. Los archivos se guardan en `FISCAL_ATTACHMENTS_DISK` y no quedan servidos por path publico directo.
 
 Libro IVA Compras:
 
@@ -424,6 +648,72 @@ Libro IVA Ventas:
 ```http
 GET /api/fiscal/documents/iva-sales?business_id=tenant-123&date_from=2026-04-01&date_to=2026-04-30
 ```
+
+Posicion IVA estimada:
+
+```http
+GET /api/fiscal/iva/position?business_id=tenant-123&date_from=2026-04-01&date_to=2026-04-30
+Authorization: Bearer token-largo-random
+```
+
+Respuesta:
+
+```json
+{
+  "data": {
+    "company": {
+      "id": 1,
+      "business_id": "tenant-123",
+      "cuit": "20123456789",
+      "legal_name": "Empresa Demo SA",
+      "fiscal_condition": "responsable_inscripto"
+    },
+    "period": {
+      "date_from": "2026-04-01",
+      "date_to": "2026-04-30"
+    },
+    "sales_totals": {
+      "imp_total": "1210.00",
+      "imp_neto": "1000.00",
+      "imp_iva": "210.00",
+      "imp_trib": "0.00",
+      "imp_op_ex": "0.00",
+      "imp_tot_conc": "0.00",
+      "iva_by_aliquot": [
+        { "id": 5, "rate": "21.00", "base_imp": "1000.00", "importe": "210.00" }
+      ]
+    },
+    "purchase_totals": {
+      "imp_total": "605.00",
+      "imp_neto": "500.00",
+      "imp_iva": "105.00",
+      "imp_trib": "0.00",
+      "imp_op_ex": "0.00",
+      "imp_tot_conc": "0.00",
+      "iva_by_aliquot": [
+        { "id": 5, "rate": "21.00", "base_imp": "500.00", "importe": "105.00" }
+      ]
+    },
+    "debit_vat": "210.00",
+    "credit_vat": "105.00",
+    "estimated_position": "105.00",
+    "result": "payable",
+    "iva_by_aliquot": [
+      {
+        "id": 5,
+        "rate": "21.00",
+        "sales_base_imp": "1000.00",
+        "sales_iva": "210.00",
+        "purchase_base_imp": "500.00",
+        "purchase_iva": "105.00",
+        "estimated_position": "105.00"
+      }
+    ]
+  }
+}
+```
+
+`estimated_position = debit_vat - credit_vat`. `result` puede ser `payable`, `credit` o `zero`.
 
 ## Reintentos y conciliacion
 
@@ -502,9 +792,12 @@ Codigos frecuentes:
 
 - Todos los endpoints fiscales pasan por auditoria en `fiscal_api_logs`.
 - Los logs sanitizan campos como certificados, claves privadas, passphrases, tokens, signs, passwords y secrets.
+- Las respuestas no JSON, PDFs y descargas no se guardan como binario en auditoria.
+- Los uploads se auditan solo como metadatos de archivo, no como contenido.
 - Las credenciales y tickets se guardan cifrados con casts `encrypted`.
 - Las respuestas publicas no exponen certificado, clave privada ni passphrase.
 - Los endpoints de ARCA se centralizan en `config/fiscal.php`.
+- En rutas por id se puede enviar `business_id`, `external_business_id`, `X-Fiscal-Business-Id` o `X-Fiscal-Company-Id`; si no coincide con el registro, la API responde `403 company_scope_mismatch`. Para exigir scope en todas las rutas por id, usar `FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=true`.
 
 ## Persistencia principal
 
@@ -515,6 +808,7 @@ Codigos frecuentes:
 - `fiscal_document_iva_items`: IVA discriminado por alicuota de ventas.
 - `fiscal_purchases`: comprobantes de proveedores para IVA Compras.
 - `fiscal_purchase_iva_items`: IVA discriminado por alicuota de compras.
+- `fiscal_purchase_attachments`: adjuntos privados de compras.
 - `fiscal_document_attempts`: intentos de operaciones fiscales.
 - `fiscal_document_events`: eventos de trazabilidad.
 - `fiscal_api_logs`: auditoria inbound/outbound.

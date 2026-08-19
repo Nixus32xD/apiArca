@@ -12,6 +12,8 @@ class FiscalPurchase extends Model
         'fiscal_company_id',
         'origin_type',
         'origin_id',
+        'category',
+        'concept',
         'voucher_date',
         'accounting_date',
         'voucher_type',
@@ -31,7 +33,12 @@ class FiscalPurchase extends Model
         'currency_rate',
         'payment_method',
         'payment_reference',
+        'payment_status',
+        'due_date',
         'associated_vouchers',
+        'trib_items',
+        'idempotency_key',
+        'idempotency_payload_hash',
         'metadata',
     ];
 
@@ -40,6 +47,7 @@ class FiscalPurchase extends Model
         return [
             'voucher_date' => 'date',
             'accounting_date' => 'date',
+            'due_date' => 'date',
             'voucher_type' => 'integer',
             'point_of_sale' => 'integer',
             'document_number' => 'integer',
@@ -51,6 +59,7 @@ class FiscalPurchase extends Model
             'imp_tot_conc' => 'decimal:2',
             'currency_rate' => 'decimal:6',
             'associated_vouchers' => 'array',
+            'trib_items' => 'array',
             'metadata' => 'array',
         ];
     }
@@ -63,5 +72,10 @@ class FiscalPurchase extends Model
     public function ivaItems(): HasMany
     {
         return $this->hasMany(FiscalPurchaseIvaItem::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(FiscalPurchaseAttachment::class);
     }
 }
