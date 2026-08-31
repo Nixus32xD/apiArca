@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Fiscal\FiscalPurchaseAttachmentController;
 use App\Http\Controllers\Api\Fiscal\FiscalPurchaseController;
 use App\Http\Middleware\AuditFiscalApiRequest;
 use App\Http\Middleware\AuthenticateFiscalClient;
+use App\Http\Middleware\SerializeFiscalSequence;
 use Illuminate\Support\Facades\Route;
 
 // HTML operativo para soporte/admin fiscal. La autenticacion se valida dentro
@@ -21,8 +22,10 @@ Route::prefix('fiscal')
     ->middleware([AuditFiscalApiRequest::class, AuthenticateFiscalClient::class])
     ->group(function (): void {
         // Emite un comprobante fiscal contra ARCA/WSFEv1 y persiste CAE,
-        // importes, IVA por alicuota, intentos, eventos y payloads.
-        Route::post('documents', [FiscalDocumentController::class, 'store']);
+        // importes, IVA por alicuota, intentos, eventos y payloads. Solo las
+        // emisiones que comparten empresa/ambiente/POS/tipo se serializan.
+        Route::post('documents', [FiscalDocumentController::class, 'store'])
+            ->middleware(SerializeFiscalSequence::class);
 
         // Devuelve Libro IVA Ventas por empresa y rango de fechas, sin que el
         // frontend tenga que recalcular netos, IVA, totales ni alicuotas.
@@ -53,12 +56,18 @@ Route::prefix('fiscal')
         Route::post('documents/{document}/email/resend', [FiscalDocumentController::class, 'email'])->whereNumber('document');
 
         // Reintenta una emision fallida o incierta. Si corresponde, concilia
-        // primero contra ARCA para evitar duplicar numeros.
-        Route::post('documents/{document}/retry', [FiscalDocumentController::class, 'retry'])->whereNumber('document');
+        // primero contra ARCA para evitar duplicar numeros. El retry participa
+        // del mismo lock que una emision nueva para cerrar carreras con cajas.
+        Route::post('documents/{document}/retry', [FiscalDocumentController::class, 'retry'])
+            ->whereNumber('document')
+            ->middleware(SerializeFiscalSequence::class);
 
         // Consulta ARCA para reconciliar un comprobante con numero asignado y
         // actualizar CAE/estado local cuando la respuesta previa fue incierta.
-        Route::post('documents/{document}/reconcile', [FiscalDocumentController::class, 'reconcile'])->whereNumber('document');
+        // Se serializa con issue/retry de esa secuencia para evitar TOCTOU.
+        Route::post('documents/{document}/reconcile', [FiscalDocumentController::class, 'reconcile'])
+            ->whereNumber('document')
+            ->middleware(SerializeFiscalSequence::class);
 
         // Informa a ARCA un comprobante emitido con CAEA que quedo pendiente de
         // reporte informativo.
