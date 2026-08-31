@@ -38,9 +38,9 @@ class SerializeFiscalSequence
             );
         }
 
-        $store = (string) (config('fiscal.sequence_lock.store') ?: config('cache.default'));
-        $ttlSeconds = max(60, (int) config('fiscal.sequence_lock.ttl_seconds', 240));
-        $waitSeconds = max(0, (int) config('fiscal.sequence_lock.wait_seconds', 15));
+        $store = (string) (config('fiscal-sequence.store') ?: config('cache.default'));
+        $ttlSeconds = max(60, (int) config('fiscal-sequence.ttl_seconds', 240));
+        $waitSeconds = max(0, (int) config('fiscal-sequence.wait_seconds', 15));
         $lock = Cache::store($store)->lock(
             $this->lockKey($company, $pointOfSale, $voucherType),
             $ttlSeconds,
@@ -150,7 +150,7 @@ class SerializeFiscalSequence
         }
 
         throw new FiscalException(
-            'Existe un comprobante de esta secuencia cuyo resultado aun no esta confirmado. Debe conciliarse antes de emitir el siguiente.',
+            'Existe un comprobante con numeracion fiscal de esta secuencia cuyo resultado aun no esta confirmado. Debe conciliarse antes de emitir el siguiente.',
             409,
             'fiscal_sequence_requires_reconcile',
             [
@@ -177,7 +177,7 @@ class SerializeFiscalSequence
             ->where('voucher_type', $document->voucher_type)
             ->where('document_number', $document->document_number)
             ->where('status', 'authorized')
-            ->whereKeyNot($document->id)
+            ->where('id', '!=', $document->id)
             ->exists();
 
         if (! $otherAuthorized) {
