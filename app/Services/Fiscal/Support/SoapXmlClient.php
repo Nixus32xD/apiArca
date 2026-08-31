@@ -6,11 +6,26 @@ use App\Exceptions\Fiscal\FiscalException;
 use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
 class SoapXmlClient
 {
+    /**
+     * Operations that can change fiscal state in ARCA and therefore must never
+     * be retried blindly after a transport failure. A timeout after the request
+     * was sent is an uncertain outcome and must be reconciled explicitly.
+     *
+     * @var list<string>
+     */
+    private const NON_RETRYABLE_TRANSPORT_OPERATIONS = [
+        'FECAESolicitar',
+        'FECAEASolicitar',
+        'FECAEARegInformativo',
+        'FECAEASinMovimientoInformar',
+    ];
+
     public function __construct(
         private readonly XmlParser $xmlParser,
         private readonly FiscalApiLogger $logger,
@@ -36,24 +51,28 @@ class SoapXmlClient
         $statusCode = null;
         $profile = $options['profile'] ?? null;
         $soapOptions = $this->resolveSoapOptions($profile);
+        $transportRetryEnabled = $this->transportRetryAllowed($operation)
+            && $soapOptions['retry_times'] > 1;
 
         try {
-            $response = Http::withOptions([
+            $request = Http::withOptions([
                 'curl' => [
                     CURLOPT_SSL_CIPHER_LIST => 'DEFAULT@SECLEVEL=1',
                 ],
             ])
-                ->retry($soapOptions['retry_times'], $soapOptions['retry_sleep_ms'], function ($exception) {
-                    return $exception instanceof ConnectionException;
-                })
                 ->timeout($soapOptions['timeout'])
                 ->connectTimeout($soapOptions['connect_timeout'])
                 ->withHeaders(array_filter([
                     'SOAPAction' => $soapAction,
                     'Content-Type' => 'text/xml; charset=utf-8',
                 ], fn ($value) => $value !== null))
-                ->withBody($envelope, 'text/xml; charset=utf-8')
-                ->post($endpoint);
+                ->withBody($envelope, 'text/xml; charset=utf-8');
+
+            if ($transportRetryEnabled) {
+                $request = $this->withTransportRetry($request, $soapOptions);
+            }
+
+            $response = $request->post($endpoint);
 
             $statusCode = $response->status();
             $responseBody = $response->body();
@@ -81,6 +100,7 @@ class SoapXmlClient
                         'status_code' => $statusCode,
                         'endpoint' => $endpoint,
                         'soap_profile' => $profile,
+                        'transport_retry_enabled' => $transportRetryEnabled,
                         'elapsed_seconds' => round(microtime(true) - $startedAt, 3),
                     ]
                 );
@@ -88,7 +108,6 @@ class SoapXmlClient
 
             return $this->xmlParser->firstNode($responseBody, $resultNode);
         } catch (ConnectionException $exception) {
-
             $elapsed = round(microtime(true) - $startedAt, 3);
 
             $this->logger->outbound(
@@ -115,7 +134,8 @@ class SoapXmlClient
                     'soap_profile' => $profile,
                     'timeout_seconds' => $soapOptions['timeout'],
                     'connect_timeout_seconds' => $soapOptions['connect_timeout'],
-                    'retry_times' => $soapOptions['retry_times'],
+                    'retry_times_configured' => $soapOptions['retry_times'],
+                    'transport_retry_enabled' => $transportRetryEnabled,
                     'retry_sleep_ms' => $soapOptions['retry_sleep_ms'],
                     'elapsed_seconds' => $elapsed,
                     'exception_class' => $exception::class,
@@ -129,7 +149,6 @@ class SoapXmlClient
         } catch (FiscalException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
-
             $this->logger->outbound(
                 $operation,
                 $endpoint,
@@ -151,12 +170,27 @@ class SoapXmlClient
                     'operation' => $operation,
                     'endpoint' => $endpoint,
                     'soap_profile' => $profile,
+                    'transport_retry_enabled' => $transportRetryEnabled,
                     'exception_class' => $exception::class,
                     'exception_message' => $exception->getMessage(),
                 ],
                 $exception
             );
         }
+    }
+
+    private function withTransportRetry(PendingRequest $request, array $soapOptions): PendingRequest
+    {
+        return $request->retry(
+            $soapOptions['retry_times'],
+            $soapOptions['retry_sleep_ms'],
+            fn ($exception): bool => $exception instanceof ConnectionException,
+        );
+    }
+
+    public function transportRetryAllowed(string $operation): bool
+    {
+        return ! in_array($operation, self::NON_RETRYABLE_TRANSPORT_OPERATIONS, true);
     }
 
     private function envelope(string $operation, string $namespace, string $bodyXml): string
