@@ -9,6 +9,8 @@ use Throwable;
 
 class FiscalApiLogger
 {
+    private const SENSITIVE_XML_FIELD = 'token|sign|in0|certificate|private_key|passphrase|password|secret';
+
     /**
      * @param  array<string, mixed>|string|null  $request
      * @param  array<string, mixed>|string|null  $response
@@ -36,7 +38,7 @@ class FiscalApiLogger
                 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
                 'request_summary' => $this->summarize($this->sanitize($request)),
                 'response_summary' => $this->summarize($this->sanitize($response)),
-                'error_message' => $exception?->getMessage(),
+                'error_message' => $exception ? $this->sanitizeXmlSecrets($exception->getMessage()) : null,
                 'trace_id' => $traceId,
             ]);
         } catch (Throwable) {
@@ -46,6 +48,10 @@ class FiscalApiLogger
 
     private function sanitize(mixed $payload): mixed
     {
+        if (is_string($payload)) {
+            return $this->sanitizeXmlSecrets($payload);
+        }
+
         if (! is_array($payload)) {
             return $payload;
         }
@@ -63,6 +69,32 @@ class FiscalApiLogger
         }
 
         return $sanitized;
+    }
+
+    private function sanitizeXmlSecrets(string $payload): string
+    {
+        $field = self::SENSITIVE_XML_FIELD;
+        $payload = (string) preg_replace_callback(
+            "/<(?<tag>(?:[a-z_][a-z0-9_.-]*:)?(?:{$field}))\\b(?<attributes>[^>]*)>.*?<\\/\\k<tag>\\s*>/is",
+            fn (array $match): string => '<'.$match['tag'].$match['attributes'].'>[redacted]</'.$match['tag'].'>',
+            $payload,
+        );
+        $payload = (string) preg_replace_callback(
+            "/&lt;(?<tag>(?:[a-z_][a-z0-9_.-]*:)?(?:{$field}))\\b(?<attributes>.*?)&gt;.*?&lt;\\/\\k<tag>\\s*&gt;/is",
+            fn (array $match): string => '&lt;'.$match['tag'].$match['attributes'].'&gt;[redacted]&lt;/'.$match['tag'].'&gt;',
+            $payload,
+        );
+        $payload = (string) preg_replace_callback(
+            "/(?<name>\\b(?:{$field}))\\s*=\\s*(?<quote>[\"']).*?\\k<quote>/is",
+            fn (array $match): string => $match['name'].'='.$match['quote'].'[redacted]'.$match['quote'],
+            $payload,
+        );
+
+        return (string) preg_replace_callback(
+            "/(?<name>\\b(?:{$field}))\\s*=\\s*&quot;.*?&quot;/is",
+            fn (array $match): string => $match['name'].'=&quot;[redacted]&quot;',
+            $payload,
+        );
     }
 
     private function summarize(mixed $payload): ?array
