@@ -15,7 +15,7 @@ despliegues en contenedores, ver [docs/docker-deployment.md](docs/docker-deploym
 
 ## Que resuelve
 
-- Alta y actualizacion de empresas fiscales por `external_business_id`.
+- Alta y actualizacion de identidades fiscales por `external_fiscal_id`.
 - Carga de certificados y claves privadas, o generacion de CSR para que el SaaS no custodie claves privadas.
 - Cache de tickets WSAA por empresa y servicio.
 - Emision de comprobantes CAE por WSFEv1.
@@ -120,7 +120,7 @@ En deploys nuevos o al traer cambios de migraciones, correr `php artisan migrate
 
 ## Integracion recomendada
 
-El frontend no deberia llamar directo a esta API fiscal. Flujo recomendado: Frontend -> backend del producto (.NET u otro) -> API Laravel ARCA. El backend del producto valida permisos y negocio, genera una `idempotency_key` estable, envia `Authorization: Bearer ...` y siempre incluye `business_id`/`external_business_id` en rutas por id.
+El frontend no deberia llamar directo a esta API fiscal. Flujo recomendado: Frontend -> backend del producto (.NET u otro) -> API Laravel ARCA. El backend del producto valida permisos y negocio, genera una `idempotency_key` estable, envia `Authorization: Bearer ...` y siempre incluye `external_fiscal_id` en rutas por id. `business_id` y `external_business_id` se aceptan temporalmente como aliases de compatibilidad.
 
 ## Autenticacion
 
@@ -147,7 +147,7 @@ Authorization: Bearer token-largo-random
 ## Flujo de emision
 
 1. El SaaS llama `POST /api/fiscal/documents`.
-2. La API resuelve la empresa fiscal por `business_id` o `external_business_id`.
+2. La API resuelve la identidad fiscal por `external_fiscal_id` (con aliases legacy `business_id` y `external_business_id`).
 3. Se valida que la empresa este habilitada y tenga una credencial activa.
 4. Se reutiliza un ticket WSAA vigente o se solicita uno nuevo.
 5. Se consulta `FECompUltimoAutorizado` para calcular el proximo numero.
@@ -159,7 +159,7 @@ Authorization: Bearer token-largo-random
 
 | Metodo | Ruta | Uso |
 | --- | --- | --- |
-| `POST` | `/api/fiscal/companies` | Crear o actualizar empresa fiscal por `external_business_id`. |
+| `POST` | `/api/fiscal/companies` | Crear o actualizar identidad fiscal por `external_fiscal_id`. |
 | `PUT` | `/api/fiscal/companies/{company}` | Actualizar empresa fiscal existente. |
 | `POST` | `/api/fiscal/companies/{company}/credentials/csr` | Generar o reutilizar CSR. |
 | `PUT` | `/api/fiscal/companies/{company}/credentials` | Guardar certificado y clave privada provistos por el cliente. |
@@ -203,7 +203,17 @@ GET /api/admin/
 
 En `local`/`testing` abre sin token. Fuera de local requiere `FISCAL_ADMIN_ENABLED=true` y `FISCAL_ADMIN_TOKEN`.
 
-`{company}` puede ser el `external_business_id` o el id numerico interno de la empresa.
+`{company}` es el `external_fiscal_id` (alias almacenado como `external_business_id`). Aun si es numérico, se resuelve como identificador externo, nunca como id interno.
+
+## Contrato multi-sucursal externo
+
+`apiArca` no modela `branch_id`: la sucursal es parte del SaaS consumidor y, si hace falta trazabilidad, viaja solamente en `metadata`. Una `FiscalCompany` representa una identidad fiscal única por `CUIT + environment`; puede usar varios puntos de venta.
+
+- En integraciones nuevas enviar `external_fiscal_id`, `point_of_sale` explícito e `idempotency_key` estable.
+- `default_point_of_sale` se conserva sólo como compatibilidad/fallback; no identifica una sucursal y nunca reemplaza un `point_of_sale` explícito.
+- La secuencia y el lock se aíslan por `fiscal_company_id + environment + point_of_sale + voucher_type`; la reserva de número se protege además por `fiscal_company_id + point_of_sale + voucher_type + document_number`.
+- Un mismo CUIT puede emitir por PV 5 y PV 8 sin mezclar números. Dos CUIT distintos pueden usar el mismo PV y el mismo número sin colisión.
+- Las respuestas de documentos incluyen `external_fiscal_id` y el alias legacy `business_id`, más CUIT, razón social, condición fiscal, ambiente, PV, tipo/número y autorización.
 
 ## Alta de empresa fiscal
 
@@ -215,7 +225,7 @@ Content-Type: application/json
 
 ```json
 {
-  "external_business_id": "tenant-123",
+  "external_fiscal_id": "tenant-123",
   "cuit": "20123456789",
   "legal_name": "Empresa Demo SA",
   "environment": "testing",
@@ -234,6 +244,7 @@ Respuesta:
 {
   "data": {
     "id": 1,
+    "external_fiscal_id": "tenant-123",
     "business_id": "tenant-123",
     "cuit": "20123456789",
     "legal_name": "Empresa Demo SA",
@@ -356,7 +367,7 @@ Payload minimo:
 
 Campos importantes:
 
-- `business_id` o `external_business_id`: identifica la empresa fiscal.
+- `external_fiscal_id`: identifica la identidad fiscal. `business_id` y `external_business_id` se aceptan como aliases legacy.
 - `origin.type` y `origin.id`: definen el origen del comprobante. `origin_type`/`origin_id`, `sale_id` y `payment_id` quedan como compatibilidad.
 - `invoice_mode=auto`: la API resuelve Factura A/B/C segun emisor y receptor.
 - `document_kind`: opcional. Acepta `invoice`, `credit_note` o `debit_note`. Para notas se requiere `associated_vouchers`.
@@ -532,7 +543,7 @@ Respuesta:
 }
 ```
 
-En integraciones nuevas enviar siempre `business_id`, `external_business_id`, `X-Fiscal-Business-Id` o `X-Fiscal-Company-Id` en rutas por id. Con `FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=true`, la API responde `422 company_scope_required` si falta ese scope.
+En integraciones nuevas enviar siempre `external_fiscal_id` o `X-Fiscal-External-Id` en rutas por id. Los aliases legacy siguen aceptados. Con `FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=true`, la API responde `422 company_scope_required` si falta ese scope.
 
 ## Consulta por origen
 
@@ -858,7 +869,7 @@ Codigos frecuentes:
 - Las credenciales y tickets se guardan cifrados con casts `encrypted`.
 - Las respuestas publicas no exponen certificado, clave privada ni passphrase.
 - Los endpoints de ARCA se centralizan en `config/fiscal.php`.
-- En rutas por id se puede enviar `business_id`, `external_business_id`, `X-Fiscal-Business-Id` o `X-Fiscal-Company-Id`; si no coincide con el registro, la API responde `403 company_scope_mismatch`. Para exigir scope en todas las rutas por id, usar `FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=true`.
+- En rutas por id se debe preferir `external_fiscal_id` (o `X-Fiscal-External-Id`). También se aceptan `business_id`, `external_business_id`, `X-Fiscal-Business-Id` y `X-Fiscal-Company-Id` por compatibilidad; si no coincide con el registro, la API responde `403 company_scope_mismatch`. Para exigir scope en todas las rutas por id, usar `FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=true`.
 
 ## Persistencia principal
 

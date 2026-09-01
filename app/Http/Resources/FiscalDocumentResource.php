@@ -15,9 +15,14 @@ class FiscalDocumentResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            // Preferred public integration identifier. business_id remains as
+            // a compatibility alias for existing SaaS consumers.
+            'external_fiscal_id' => $this->company?->external_business_id,
             'business_id' => $this->company?->external_business_id,
             'company' => [
                 'id' => $this->company?->id,
+                'external_fiscal_id' => $this->company?->external_business_id,
+                'business_id' => $this->company?->external_business_id,
                 'cuit' => $this->company?->cuit,
                 'legal_name' => $this->company?->legal_name,
                 'fiscal_condition' => $this->company?->fiscal_condition,

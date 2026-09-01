@@ -75,6 +75,7 @@ class FiscalDiagnosticsService
         return [
             'ok' => collect($checks)->every(fn (array $check): bool => (bool) ($check['ok'] ?? false)),
             'company_id' => $company->id,
+            'external_fiscal_id' => $company->external_business_id,
             'business_id' => $company->external_business_id,
             'environment' => $company->environment,
             'checks' => $checks,

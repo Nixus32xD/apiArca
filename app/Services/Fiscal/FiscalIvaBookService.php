@@ -222,6 +222,7 @@ class FiscalIvaBookService
     {
         return [
             'id' => $company->id,
+            'external_fiscal_id' => $company->external_business_id,
             'business_id' => $company->external_business_id,
             'cuit' => $company->cuit,
             'legal_name' => $company->legal_name,
