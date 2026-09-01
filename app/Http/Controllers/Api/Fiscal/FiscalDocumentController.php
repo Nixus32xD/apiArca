@@ -37,6 +37,8 @@ class FiscalDocumentController extends Controller
     public function store(StoreFiscalDocumentRequest $request): JsonResponse
     {
         try {
+            $company = $this->companyResolver->fromPayload($request->validated());
+            $this->scopeGuard->ensureClientCanAccessCompany($request, $company);
             $result = $this->invoiceService->issue($request->validated(), $this->traceId($request));
             $resource = new FiscalDocumentResource($result['document']->load(['company', 'ivaItems', 'attempts', 'events']));
 
@@ -67,6 +69,7 @@ class FiscalDocumentController extends Controller
     {
         try {
             $company = $this->companyResolver->fromPayload($request->validated());
+            $this->scopeGuard->ensureClientCanAccessCompany($request, $company);
             $query = $company->documents()
                 ->with(['company', 'ivaItems'])
                 ->where('origin_type', $request->validated('origin_type'))
@@ -86,6 +89,7 @@ class FiscalDocumentController extends Controller
     {
         try {
             $company = $this->companyResolver->fromPayload($request->validated());
+            $this->scopeGuard->ensureClientCanAccessCompany($request, $company);
 
             return response()->json([
                 'data' => $this->ivaBookService->sales(
@@ -103,6 +107,7 @@ class FiscalDocumentController extends Controller
     {
         try {
             $company = $this->companyResolver->fromPayload($request->validated());
+            $this->scopeGuard->ensureClientCanAccessCompany($request, $company);
             $sales = $this->ivaBookService->sales(
                 $company,
                 $request->validated('date_from'),

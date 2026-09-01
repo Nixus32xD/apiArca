@@ -17,12 +17,13 @@ class StoreFiscalDocumentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'business_id' => ['required_without:external_business_id', 'string', 'max:120'],
-            'external_business_id' => ['required_without:business_id', 'string', 'max:120'],
+            'external_fiscal_id' => ['required_without_all:external_business_id,business_id', 'string', 'max:120'],
+            'business_id' => ['required_without_all:external_business_id,external_fiscal_id', 'string', 'max:120'],
+            'external_business_id' => ['required_without_all:business_id,external_fiscal_id', 'string', 'max:120'],
             'origin' => ['nullable', 'array'],
-            'origin.type' => ['required_with:origin', 'string', 'in:sale,payment,manual,appointment'],
+            'origin.type' => ['required_with:origin', 'string', 'max:80'],
             'origin.id' => ['nullable', 'string', 'max:120'],
-            'origin_type' => ['nullable', 'string', 'in:sale,payment,manual,appointment'],
+            'origin_type' => ['nullable', 'string', 'max:80'],
             'origin_id' => ['nullable', 'string', 'max:120'],
             'sale_id' => ['nullable', 'string', 'max:120'],
             'payment_id' => ['nullable', 'string', 'max:120'],

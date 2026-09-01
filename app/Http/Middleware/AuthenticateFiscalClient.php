@@ -15,12 +15,13 @@ class AuthenticateFiscalClient
     public function handle(Request $request, Closure $next): Response
     {
         $configuredTokens = config('fiscal.api_tokens', []);
+        $configuredClients = config('fiscal.api_clients', []);
 
-        if ($configuredTokens === [] && app()->environment('testing')) {
+        if ($configuredTokens === [] && $configuredClients === [] && app()->environment('testing')) {
             return $next($request);
         }
 
-        if ($configuredTokens === []) {
+        if ($configuredTokens === [] && $configuredClients === []) {
             return $this->deny('Fiscal API authentication is not configured.', Response::HTTP_SERVICE_UNAVAILABLE);
         }
 
@@ -30,11 +31,43 @@ class AuthenticateFiscalClient
             return $this->deny('Missing fiscal API token.', Response::HTTP_UNAUTHORIZED);
         }
 
+        $client = $this->matchingClient($providedToken, $configuredClients);
+        if ($client !== null) {
+            $request->attributes->set('fiscal_client', $client);
+
+            return $next($request);
+        }
+
         if (! $this->matchesAnyConfiguredToken($providedToken, $configuredTokens)) {
             return $this->deny('Invalid fiscal API token.', Response::HTTP_FORBIDDEN);
         }
 
+        $request->attributes->set('fiscal_client', ['id' => 'legacy-token', 'external_fiscal_ids' => null]);
+
         return $next($request);
+    }
+
+    /** @param array<int, mixed> $clients */
+    private function matchingClient(string $providedToken, array $clients): ?array
+    {
+        foreach ($clients as $client) {
+            if (! is_array($client) || ! isset($client['token']) || ! is_string($client['token'])) {
+                continue;
+            }
+
+            if (! $this->matchesAnyConfiguredToken($providedToken, [$client['token']])) {
+                continue;
+            }
+
+            return [
+                'id' => (string) ($client['id'] ?? 'unnamed-client'),
+                'external_fiscal_ids' => is_array($client['external_fiscal_ids'] ?? null)
+                    ? array_values(array_filter($client['external_fiscal_ids'], 'is_scalar'))
+                    : [],
+            ];
+        }
+
+        return null;
     }
 
     /**

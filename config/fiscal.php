@@ -16,6 +16,12 @@ return [
         explode(',', (string) env('FISCAL_API_TOKENS', ''))
     ))),
 
+    // Optional named consumers. Each entry has id, token (or sha256:<hash>)
+    // and external_fiscal_ids. This separates caller authentication from its
+    // authorization over fiscal identities without importing any consumer
+    // domain model. Legacy FISCAL_API_TOKENS remains supported temporarily.
+    'api_clients' => json_decode((string) env('FISCAL_API_CLIENTS', '[]'), true) ?: [],
+
     'soap' => [
         'timeout' => (int) env('FISCAL_SOAP_TIMEOUT', 30),
         'connect_timeout' => (int) env('FISCAL_SOAP_CONNECT_TIMEOUT', 10),
@@ -123,6 +129,8 @@ return [
     ],
 
     'security' => [
+        // Enable this in production once every legacy caller sends its fiscal
+        // identity on ID-based routes. Named api_clients are always scoped.
         'require_company_scope_for_id_routes' => (bool) env('FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES', false),
     ],
 
