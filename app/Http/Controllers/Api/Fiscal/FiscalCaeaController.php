@@ -33,6 +33,7 @@ class FiscalCaeaController extends Controller
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'caea' => $this->normalizeCaea($response),
                     'raw_response' => $response,
@@ -55,6 +56,7 @@ class FiscalCaeaController extends Controller
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'caea' => $this->normalizeCaea($response),
                     'raw_response' => $response,

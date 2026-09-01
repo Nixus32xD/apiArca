@@ -6,6 +6,7 @@ use App\Models\FiscalApiLog;
 use App\Models\FiscalCompany;
 use App\Models\FiscalCredential;
 use App\Models\FiscalDocument;
+use App\Models\FiscalSequenceReservation;
 use App\Services\Fiscal\Contracts\Wsfev1Client;
 use App\Services\Fiscal\FiscalCompanyResolver;
 use Illuminate\Support\Facades\Cache;
@@ -25,6 +26,12 @@ beforeEach(function (): void {
 
         public int $consultCalls = 0;
 
+        /** @var array<int, array{fiscal_company_id: int, point_of_sale: int, voucher_type: int}> */
+        public array $lastAuthorizedCalls = [];
+
+        /** @var array<int, int> */
+        public array $authorizedCompanyIds = [];
+
         public ?FiscalException $authorizeException = null;
 
         public ?FiscalException $consultException = null;
@@ -39,6 +46,7 @@ beforeEach(function (): void {
         public function authorize($company, $ticket, array $feCaeRequest, $document = null, ?string $traceId = null): array
         {
             $this->authorizeCalls++;
+            $this->authorizedCompanyIds[] = $company->id;
 
             if ($this->authorizeException) {
                 throw $this->authorizeException;
@@ -60,6 +68,12 @@ beforeEach(function (): void {
 
         public function lastAuthorized($company, $ticket, int $pointOfSale, int $voucherType, $document = null, ?string $traceId = null): array
         {
+            $this->lastAuthorizedCalls[] = [
+                'fiscal_company_id' => $company->id,
+                'point_of_sale' => $pointOfSale,
+                'voucher_type' => $voucherType,
+            ];
+
             return ['CbteNro' => 10];
         }
 
@@ -798,13 +812,13 @@ it('rejects an ARCA certificate that does not match the generated private key', 
         ->and($credential->active)->toBeFalse();
 });
 
-it('rejects a second business id for the same CUIT and environment', function (): void {
+it('rejects a second external fiscal id for the same CUIT and environment', function (): void {
     fiscalCompanyWithTicket();
 
     $this
         ->withToken('test-token')
         ->postJson('/api/fiscal/companies', [
-            'external_business_id' => 'another-business-id',
+            'external_fiscal_id' => 'another-fiscal-id',
             'cuit' => '20123456789',
             'legal_name' => 'Empresa Demo SA',
             'fiscal_condition' => 'monotributo',
@@ -812,8 +826,62 @@ it('rejects a second business id for the same CUIT and environment', function ()
         ])
         ->assertStatus(409)
         ->assertJsonPath('error_code', 'fiscal_company_identity_exists')
+        ->assertJsonPath('context.external_fiscal_id', 'business-1')
+        ->assertJsonPath('context.business_id', 'business-1')
         ->assertJsonPath('context.external_business_id', 'business-1');
 });
+
+it('keeps CUIT and environment immutable after fiscal history exists', function (string $history): void {
+    $company = fiscalCompanyForCredentialOnboarding('immutable-'.$history);
+
+    match ($history) {
+        'document' => $company->documents()->create([
+            'point_of_sale' => 5,
+            'voucher_type' => 11,
+            'idempotency_key' => 'immutable-document',
+        ]),
+        'credential' => $company->credentials()->create([
+            'certificate' => 'certificate',
+            'private_key' => 'private-key',
+            'active' => true,
+            'status' => 'active',
+        ]),
+        'access_ticket' => $company->accessTickets()->create([
+            'service' => 'wsfe',
+            'token' => 'token',
+            'sign' => 'sign',
+            'generation_time' => now()->subMinute(),
+            'expiration_time' => now()->addHour(),
+        ]),
+    };
+
+    $basePayload = [
+        'external_fiscal_id' => $company->external_business_id,
+        'legal_name' => $company->legal_name,
+        'fiscal_condition' => $company->fiscal_condition,
+        'default_point_of_sale' => 5,
+        'default_voucher_type' => 11,
+        'enabled' => true,
+    ];
+
+    $this->withToken('test-token')
+        ->putJson("/api/fiscal/companies/{$company->external_business_id}", [
+            ...$basePayload,
+            'cuit' => '20987654321',
+            'environment' => 'testing',
+        ])
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'fiscal_identity_immutable');
+
+    $this->withToken('test-token')
+        ->putJson("/api/fiscal/companies/{$company->external_business_id}", [
+            ...$basePayload,
+            'cuit' => $company->cuit,
+            'environment' => 'production',
+        ])
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'fiscal_identity_immutable');
+})->with(['document', 'credential', 'access_ticket']);
 
 it('never resolves a numeric external fiscal identifier as an internal primary key', function (): void {
     fiscalCompanyWithTicket(['external_business_id' => 'erp-acme', 'cuit' => '20123456780']);
@@ -837,6 +905,137 @@ it('issues for a generic consumer without ComerStock identifiers', function (): 
         ->assertJsonPath('data.number', 11);
 
     expect(FiscalDocument::query()->firstOrFail()->origin_type)->toBe('transaction');
+});
+
+it('uses one fiscal identity with independent sequences for explicit points of sale', function (): void {
+    config(['fiscal-sequence.store' => 'array']);
+    $company = fiscalCompanyWithTicket([
+        'external_business_id' => 'fiscal-a',
+        'cuit' => '20123456780',
+        'default_point_of_sale' => 1,
+    ]);
+
+    $pv5 = fiscalPayload($company->external_business_id);
+    unset($pv5['business_id'], $pv5['sale_id']);
+    $pv5['external_fiscal_id'] = $company->external_business_id;
+    $pv5['point_of_sale'] = 5;
+    $pv5['idempotency_key'] = 'fiscal-a-pv-5';
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $pv5)
+        ->assertCreated()
+        ->assertJsonPath('data.external_fiscal_id', 'fiscal-a')
+        ->assertJsonPath('data.company.external_fiscal_id', 'fiscal-a')
+        ->assertJsonPath('data.company.cuit', '20123456780')
+        ->assertJsonPath('data.company.legal_name', 'Empresa Demo SA')
+        ->assertJsonPath('data.company.fiscal_condition', 'monotributo')
+        ->assertJsonPath('data.company.environment', 'testing')
+        ->assertJsonPath('data.point_of_sale', 5)
+        ->assertJsonPath('data.cbte_type', 11)
+        ->assertJsonPath('data.number', 11)
+        ->assertJsonPath('data.authorization_type', 'CAE')
+        ->assertJsonPath('data.authorization_code', '12345678901234');
+
+    $pv5Lock = Cache::store('array')->lock("fiscal:sequence:{$company->id}:testing:5:11", 60);
+    expect($pv5Lock->get())->toBeTrue();
+
+    try {
+        $pv8 = [...$pv5, 'point_of_sale' => 8, 'idempotency_key' => 'fiscal-a-pv-8'];
+
+        $this->withToken('test-token')
+            ->postJson('/api/fiscal/documents', $pv8)
+            ->assertCreated()
+            ->assertJsonPath('data.point_of_sale', 8)
+            ->assertJsonPath('data.number', 11);
+    } finally {
+        $pv5Lock->release();
+    }
+
+    expect(FiscalDocument::query()->where('fiscal_company_id', $company->id)->pluck('point_of_sale')->sort()->values()->all())
+        ->toBe([5, 8])
+        ->and(FiscalSequenceReservation::query()->where('fiscal_company_id', $company->id)->pluck('document_number')->all())
+        ->toBe([11, 11])
+        ->and($this->wsfe->authorizedCompanyIds)->toBe([$company->id, $company->id])
+        ->and($this->wsfe->lastAuthorizedCalls)->toContain([
+            'fiscal_company_id' => $company->id,
+            'point_of_sale' => 5,
+            'voucher_type' => 11,
+        ])
+        ->toContain([
+            'fiscal_company_id' => $company->id,
+            'point_of_sale' => 8,
+            'voucher_type' => 11,
+        ]);
+});
+
+it('isolates same POS sequences by fiscal identity for a client authorized for two CUITs', function (): void {
+    config(['fiscal-sequence.store' => 'array']);
+    $first = fiscalCompanyWithTicket(['external_business_id' => 'fiscal-a', 'cuit' => '20123456780']);
+    $second = fiscalCompanyWithTicket(['external_business_id' => 'fiscal-b', 'cuit' => '20333444559']);
+    $forbidden = fiscalCompanyWithTicket(['external_business_id' => 'fiscal-c', 'cuit' => '20444555660']);
+    config([
+        'fiscal.api_tokens' => [],
+        'fiscal.api_clients' => [[
+            'id' => 'multi-fiscal-saas',
+            'token' => 'multi-fiscal-token',
+            'external_fiscal_ids' => ['fiscal-a', 'fiscal-b'],
+        ]],
+    ]);
+
+    $firstLock = Cache::store('array')->lock("fiscal:sequence:{$first->id}:testing:5:11", 60);
+    expect($firstLock->get())->toBeTrue();
+
+    try {
+        $secondPayload = fiscalPayload($second->external_business_id);
+        unset($secondPayload['business_id'], $secondPayload['sale_id']);
+        $secondPayload['external_fiscal_id'] = $second->external_business_id;
+        $secondPayload['point_of_sale'] = 5;
+        $secondPayload['idempotency_key'] = 'fiscal-b-pv-5';
+
+        $this->withToken('multi-fiscal-token')
+            ->postJson('/api/fiscal/documents', $secondPayload)
+            ->assertCreated()
+            ->assertJsonPath('data.external_fiscal_id', 'fiscal-b')
+            ->assertJsonPath('data.point_of_sale', 5)
+            ->assertJsonPath('data.number', 11);
+    } finally {
+        $firstLock->release();
+    }
+
+    $firstPayload = fiscalPayload($first->external_business_id);
+    unset($firstPayload['business_id'], $firstPayload['sale_id']);
+    $firstPayload['external_fiscal_id'] = $first->external_business_id;
+    $firstPayload['point_of_sale'] = 5;
+    $firstPayload['idempotency_key'] = 'fiscal-a-pv-5';
+
+    $this->withToken('multi-fiscal-token')
+        ->postJson('/api/fiscal/documents', $firstPayload)
+        ->assertCreated()
+        ->assertJsonPath('data.external_fiscal_id', 'fiscal-a')
+        ->assertJsonPath('data.point_of_sale', 5)
+        ->assertJsonPath('data.number', 11);
+
+    $forbiddenPayload = fiscalPayload($forbidden->external_business_id);
+    $forbiddenPayload['external_fiscal_id'] = $forbidden->external_business_id;
+
+    $this->withToken('multi-fiscal-token')
+        ->postJson('/api/fiscal/documents', $forbiddenPayload)
+        ->assertForbidden()
+        ->assertJsonPath('error_code', 'fiscal_company_forbidden');
+
+    expect(FiscalSequenceReservation::query()->where('document_number', 11)->count())->toBe(2)
+        ->and(FiscalDocument::query()->where('document_number', 11)->pluck('fiscal_company_id')->sort()->values()->all())
+        ->toBe([$first->id, $second->id])
+        ->and($this->wsfe->lastAuthorizedCalls)->toContain([
+            'fiscal_company_id' => $first->id,
+            'point_of_sale' => 5,
+            'voucher_type' => 11,
+        ])
+        ->toContain([
+            'fiscal_company_id' => $second->id,
+            'point_of_sale' => 5,
+            'voucher_type' => 11,
+        ]);
 });
 
 it('fails closed when the fiscal sequence lock is unavailable', function (): void {

@@ -89,11 +89,11 @@ Route::prefix('fiscal')
         // Elimina una compra manual y sus items de IVA asociados.
         Route::delete('purchases/{purchase}', [FiscalPurchaseController::class, 'destroy'])->whereNumber('purchase');
 
-        // Crea o actualiza una empresa fiscal del SaaS por business_id/CUIT.
+        // Crea o actualiza una identidad fiscal externa por CUIT/ambiente.
         Route::post('companies', [FiscalCompanyController::class, 'upsert']);
 
         // Actualiza una empresa fiscal existente identificada por id o
-        // external_business_id.
+        // external_fiscal_id (aliases legacy aceptados).
         Route::put('companies/{company}', [FiscalCompanyController::class, 'upsert']);
 
         // Genera clave privada cifrada y CSR para cargar en ARCA. No activa la

@@ -15,9 +15,11 @@ class FiscalPurchaseResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'external_fiscal_id' => $this->company?->external_business_id,
             'business_id' => $this->company?->external_business_id,
             'company' => [
                 'id' => $this->company?->id,
+                'external_fiscal_id' => $this->company?->external_business_id,
                 'cuit' => $this->company?->cuit,
                 'legal_name' => $this->company?->legal_name,
             ],

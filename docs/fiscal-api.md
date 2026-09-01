@@ -5,7 +5,7 @@ API Laravel para emitir comprobantes por WSAA + WSFEv1 con soporte multiempresa.
 ## Flujo de emision
 
 1. El SaaS llama `POST /api/fiscal/documents` con `Authorization: Bearer <token>`.
-2. La API resuelve la empresa por `business_id` o `external_business_id`.
+2. La API resuelve la identidad fiscal por `external_fiscal_id`; `business_id` y `external_business_id` siguen como aliases legacy.
 3. Se valida que la empresa este habilitada y tenga credenciales activas.
 4. `TokenCacheService` reutiliza un `access_ticket` vigente o renueva contra WSAA.
 5. `WSFEv1Service` consulta `FECompUltimoAutorizado`.
@@ -53,8 +53,14 @@ estar definido `OPENSSL_CONF` a nivel de proceso antes de iniciar PHP.
 ## Endpoints
 
 Todas las rutas bajo `/api/fiscal/*` requieren `Authorization: Bearer <token>`
-y pasan por auditoria en `fiscal_api_logs`. `{company}` puede ser
-`external_business_id` o el id interno numerico.
+y pasan por auditoria en `fiscal_api_logs`. `{company}` debe ser el
+`external_fiscal_id` (almacenado como `external_business_id`); un valor numérico sigue siendo un identificador externo, nunca un id interno.
+
+## Contrato multi-sucursal externo
+
+La sucursal pertenece al SaaS consumidor: `apiArca` no incorpora `branch_id` al modelo fiscal. Una identidad fiscal es única por `CUIT + environment` y puede emitir desde varios `point_of_sale`.
+
+Las integraciones nuevas envían `external_fiscal_id`, `point_of_sale` explícito e `idempotency_key`. `default_point_of_sale` es sólo fallback de compatibilidad, no representa una sucursal. La secuencia se aísla por identidad fiscal, ambiente, PV y tipo de comprobante; por eso el mismo CUIT puede usar PV 5/PV 8 sin mezclar números y dos CUIT pueden compartir PV/número sin conflicto.
 
 ### Admin fiscal
 
@@ -68,7 +74,7 @@ y pasan por auditoria en `fiscal_api_logs`. `{company}` puede ser
 ### Empresas fiscales
 
 - `POST /api/fiscal/companies`: crea o actualiza una empresa fiscal usando
-  `business_id`/`external_business_id`, CUIT, razon social, condicion fiscal,
+  `external_fiscal_id` (aliases `business_id`/`external_business_id`), CUIT, razon social, condicion fiscal,
   ambiente, punto de venta default y tipo de comprobante default.
 - `PUT /api/fiscal/companies/{company}`: actualiza una empresa existente. Se usa
   cuando el SaaS ya conoce el identificador interno o externo de la empresa.

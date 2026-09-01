@@ -66,10 +66,12 @@ class FiscalCompanyController extends Controller
                     ->first();
                 if ($sameFiscalIdentity) {
                     return response()->json([
-                        'message' => 'Ya existe una razón social fiscal con ese CUIT y ambiente. Reutilizá su business_id para vincular otra sucursal.',
+                        'message' => 'Ya existe una identidad fiscal con ese CUIT y ambiente. Reutilizá su external_fiscal_id.',
                         'error_code' => 'fiscal_company_identity_exists',
                         'context' => [
+                            'external_fiscal_id' => $sameFiscalIdentity->external_business_id,
                             'external_business_id' => $sameFiscalIdentity->external_business_id,
+                            'business_id' => $sameFiscalIdentity->external_business_id,
                         ],
                     ], 409);
                 }
@@ -144,6 +146,7 @@ class FiscalCompanyController extends Controller
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'credential' => [
                         'id' => $credential->id,
@@ -175,6 +178,7 @@ class FiscalCompanyController extends Controller
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'credential' => [
                         'id' => $credential->id,
@@ -214,6 +218,7 @@ class FiscalCompanyController extends Controller
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'credential' => [
                         'id' => $credential->id,
@@ -255,6 +260,7 @@ class FiscalCompanyController extends Controller
             return response()->json([
                 'data' => [
                     'id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'cuit' => $fiscalCompany->cuit,
                     'legal_name' => $fiscalCompany->legal_name,
@@ -369,6 +375,7 @@ class FiscalCompanyController extends Controller
                     'error' => $apiError,
                     'data' => [
                         'company_id' => $fiscalCompany->id,
+                        'external_fiscal_id' => $fiscalCompany->external_business_id,
                         'business_id' => $fiscalCompany->external_business_id,
                         'environment' => $fiscalCompany->environment,
                         'activities' => [],
@@ -379,6 +386,7 @@ class FiscalCompanyController extends Controller
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'environment' => $fiscalCompany->environment,
                     'activities' => $this->normalizeActivities($response),
@@ -411,6 +419,7 @@ class FiscalCompanyController extends Controller
                     'error' => $apiError,
                     'data' => [
                         'company_id' => $fiscalCompany->id,
+                        'external_fiscal_id' => $fiscalCompany->external_business_id,
                         'business_id' => $fiscalCompany->external_business_id,
                         'environment' => $fiscalCompany->environment,
                         'points_of_sale' => [],
@@ -421,6 +430,7 @@ class FiscalCompanyController extends Controller
             return response()->json([
                 'data' => [
                     'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
                     'business_id' => $fiscalCompany->external_business_id,
                     'environment' => $fiscalCompany->environment,
                     'points_of_sale' => $this->normalizePointsOfSale($response),
@@ -445,6 +455,7 @@ class FiscalCompanyController extends Controller
     {
         return [
             'id' => $company->id,
+            'external_fiscal_id' => $company->external_business_id,
             'business_id' => $company->external_business_id,
             'cuit' => $company->cuit,
             'legal_name' => $company->legal_name,
