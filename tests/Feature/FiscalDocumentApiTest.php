@@ -7,6 +7,8 @@ use App\Models\FiscalCompany;
 use App\Models\FiscalCredential;
 use App\Models\FiscalDocument;
 use App\Services\Fiscal\Contracts\Wsfev1Client;
+use App\Services\Fiscal\FiscalCompanyResolver;
+use Illuminate\Support\Facades\Cache;
 
 beforeEach(function (): void {
     if (config('database.default') === 'sqlite' && ! extension_loaded('pdo_sqlite')) {
@@ -794,6 +796,86 @@ it('rejects an ARCA certificate that does not match the generated private key', 
 
     expect($credential->refresh()->status)->toBe('pending_certificate')
         ->and($credential->active)->toBeFalse();
+});
+
+it('rejects a second business id for the same CUIT and environment', function (): void {
+    fiscalCompanyWithTicket();
+
+    $this
+        ->withToken('test-token')
+        ->postJson('/api/fiscal/companies', [
+            'external_business_id' => 'another-business-id',
+            'cuit' => '20123456789',
+            'legal_name' => 'Empresa Demo SA',
+            'fiscal_condition' => 'monotributo',
+            'environment' => 'testing',
+        ])
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'fiscal_company_identity_exists')
+        ->assertJsonPath('context.external_business_id', 'business-1');
+});
+
+it('never resolves a numeric external fiscal identifier as an internal primary key', function (): void {
+    fiscalCompanyWithTicket(['external_business_id' => 'erp-acme', 'cuit' => '20123456780']);
+
+    expect(fn () => app(FiscalCompanyResolver::class)->resolveExternalIdentifier('1'))
+        ->toThrow(FiscalException::class, 'Fiscal company was not found.');
+});
+
+it('issues for a generic consumer without ComerStock identifiers', function (): void {
+    $company = fiscalCompanyWithTicket(['external_business_id' => 'erp-acme', 'cuit' => '20123456780']);
+    $payload = fiscalPayload($company->external_business_id);
+    unset($payload['business_id'], $payload['sale_id']);
+    $payload['external_fiscal_id'] = 'erp-acme';
+    $payload['origin'] = ['type' => 'transaction', 'id' => 'TX-1000'];
+    $payload['metadata'] = ['source' => 'erp_x', 'store' => 'NY-04', 'transaction' => 'TX-1000'];
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'authorized')
+        ->assertJsonPath('data.number', 11);
+
+    expect(FiscalDocument::query()->firstOrFail()->origin_type)->toBe('transaction');
+});
+
+it('fails closed when the fiscal sequence lock is unavailable', function (): void {
+    config(['fiscal-sequence.store' => 'array', 'fiscal-sequence.wait_seconds' => 0]);
+    $company = fiscalCompanyWithTicket();
+    $lock = Cache::store('array')->lock("fiscal:sequence:{$company->id}:{$company->environment}:1:11", 60);
+    expect($lock->get())->toBeTrue();
+
+    try {
+        $this->withToken('test-token')
+            ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id))
+            ->assertStatus(409)
+            ->assertJsonPath('error_code', 'fiscal_sequence_busy');
+
+        expect(FiscalDocument::query()->count())->toBe(0);
+    } finally {
+        $lock->release();
+    }
+});
+
+it('authorizes a named API client only for its configured fiscal identities', function (): void {
+    $allowed = fiscalCompanyWithTicket(['external_business_id' => 'erp-allowed', 'cuit' => '20123456780']);
+    $denied = fiscalCompanyWithTicket(['external_business_id' => 'erp-denied', 'cuit' => '20333444559']);
+    config([
+        'fiscal.api_tokens' => [],
+        'fiscal.api_clients' => [[
+            'id' => 'erp-x',
+            'token' => 'erp-token',
+            'external_fiscal_ids' => [$allowed->external_business_id],
+        ]],
+    ]);
+
+    $payload = fiscalPayload($denied->external_business_id);
+    $payload['external_fiscal_id'] = $denied->external_business_id;
+
+    $this->withToken('erp-token')
+        ->postJson('/api/fiscal/documents', $payload)
+        ->assertForbidden()
+        ->assertJsonPath('error_code', 'fiscal_company_forbidden');
 });
 
 function fiscalCompanyWithTicket(array $overrides = []): FiscalCompany

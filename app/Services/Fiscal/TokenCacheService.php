@@ -2,12 +2,13 @@
 
 namespace App\Services\Fiscal;
 
+use App\Exceptions\Fiscal\FiscalException;
 use App\Models\AccessTicket;
 use App\Models\FiscalCompany;
 use App\Services\Fiscal\Contracts\WsaaClient;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Throwable;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 
 class TokenCacheService
 {
@@ -98,8 +99,16 @@ class TokenCacheService
             $lock = Cache::lock($lockKey, 15);
 
             return $lock->block(5, $callback);
-        } catch (Throwable) {
-            return $callback();
+        } catch (LockTimeoutException $exception) {
+            // A peer may have renewed the ticket while this process waited.
+            $current = $company->accessTickets()->where('service', $service)->first();
+            if ($current && $this->isReusableTicket($current, $company, $renewAfter)) {
+                return $current->refresh();
+            }
+
+            throw new FiscalException('La renovación del Access Ticket está ocupada; reintentá.', 503, 'wsaa_ticket_busy', [], $exception);
+        } catch (\Throwable $exception) {
+            throw new FiscalException('No se pudo adquirir el lock de Access Ticket compartido.', 503, 'wsaa_ticket_lock_unavailable', [], $exception);
         }
     }
 

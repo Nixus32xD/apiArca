@@ -56,16 +56,13 @@ class AuditFiscalApiRequest
 
     private function resolveCompanyId(Request $request): ?int
     {
-        $businessId = $request->input('business_id') ?: $request->input('external_business_id');
+        $businessId = $request->input('external_fiscal_id') ?: $request->input('business_id') ?: $request->input('external_business_id');
 
         if (! is_scalar($businessId) || $businessId === '') {
             return null;
         }
 
-        return FiscalCompany::query()
-            ->where('external_business_id', (string) $businessId)
-            ->when(is_numeric($businessId), fn ($query) => $query->orWhereKey((int) $businessId))
-            ->value('id');
+        return FiscalCompany::query()->where('external_business_id', (string) $businessId)->value('id');
     }
 
     private function sanitize(mixed $payload): mixed

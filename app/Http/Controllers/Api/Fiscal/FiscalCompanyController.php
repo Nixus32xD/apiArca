@@ -37,9 +37,12 @@ class FiscalCompanyController extends Controller
     {
         try {
             $data = $request->validated();
+            $data['external_business_id'] = $data['external_fiscal_id'] ?? $data['external_business_id'];
+            unset($data['external_fiscal_id']);
 
             if ($company !== null) {
                 $existing = $this->companyResolver->resolve($company);
+                $this->assertIdentityCanBeChanged($existing, $data);
                 $previousEnvironment = $existing->environment;
                 $existing->update($data);
                 $this->invalidateAccessTicketsIfEnvironmentChanged($existing, $previousEnvironment);
@@ -52,10 +55,25 @@ class FiscalCompanyController extends Controller
                 ->first();
 
             if ($fiscalCompany) {
+                $this->assertIdentityCanBeChanged($fiscalCompany, $data);
                 $previousEnvironment = $fiscalCompany->environment;
                 $fiscalCompany->update($data);
                 $this->invalidateAccessTicketsIfEnvironmentChanged($fiscalCompany, $previousEnvironment);
             } else {
+                $sameFiscalIdentity = FiscalCompany::query()
+                    ->where('cuit', $data['cuit'])
+                    ->where('environment', $data['environment'])
+                    ->first();
+                if ($sameFiscalIdentity) {
+                    return response()->json([
+                        'message' => 'Ya existe una razón social fiscal con ese CUIT y ambiente. Reutilizá su business_id para vincular otra sucursal.',
+                        'error_code' => 'fiscal_company_identity_exists',
+                        'context' => [
+                            'external_business_id' => $sameFiscalIdentity->external_business_id,
+                        ],
+                    ], 409);
+                }
+
                 $fiscalCompany = FiscalCompany::query()->create($data);
             }
 
@@ -71,6 +89,29 @@ class FiscalCompanyController extends Controller
                 'message' => 'Could not persist fiscal company.',
                 'error_code' => 'company_persist_failed',
             ], 422);
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private function assertIdentityCanBeChanged(FiscalCompany $company, array $data): void
+    {
+        $changesIdentity = (string) $data['cuit'] !== (string) $company->cuit
+            || (string) $data['environment'] !== (string) $company->environment;
+
+        if (! $changesIdentity) {
+            return;
+        }
+
+        $hasHistory = $company->documents()->exists()
+            || $company->accessTickets()->exists()
+            || $company->credentials()->exists();
+
+        if ($hasHistory) {
+            throw new FiscalException(
+                'No se puede cambiar CUIT ni ambiente de una identidad fiscal con historial. Creá otra identidad fiscal.',
+                409,
+                'fiscal_identity_immutable',
+            );
         }
     }
 

@@ -6,6 +6,7 @@ use App\Exceptions\Fiscal\FiscalException;
 use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use App\Models\FiscalDocumentAttempt;
+use App\Models\FiscalSequenceReservation;
 use App\Services\Fiscal\Contracts\Wsfev1Client;
 use App\Services\Fiscal\Support\ArcaErrorMapper;
 use Illuminate\Database\QueryException;
@@ -196,6 +197,26 @@ class FiscalInvoiceService
                     'reconcile_required_before_retry',
                 );
             }
+
+            if ($document->error_code === 'arca_voucher_not_found') {
+                $ticket = $this->tokenCache->get($document->company);
+                $last = $this->wsfev1->lastAuthorized(
+                    $document->company,
+                    $ticket,
+                    $document->point_of_sale,
+                    $document->voucher_type,
+                    $document,
+                    $traceId,
+                );
+
+                if ((int) data_get($last, 'CbteNro', 0) >= (int) $document->document_number) {
+                    throw new FiscalException(
+                        'La secuencia ARCA avanzó antes del reintento; no es seguro reutilizar este número.',
+                        409,
+                        'fiscal_number_advanced',
+                    );
+                }
+            }
         }
 
         return [
@@ -221,9 +242,7 @@ class FiscalInvoiceService
 
             $lastNumber = (int) data_get($last, 'CbteNro', 0);
 
-            $document->forceFill([
-                'document_number' => $lastNumber + 1,
-            ])->save();
+            $this->reserveDocumentNumber($document, $lastNumber + 1);
         }
 
         $request = $this->buildFeCaeRequest($document);
@@ -296,9 +315,15 @@ class FiscalInvoiceService
                 $traceId,
             );
 
-            $document->forceFill([
-                'document_number' => ((int) data_get($last, 'CbteNro', 0)) + 1,
-            ])->save();
+            $localReservation = (int) FiscalDocument::query()
+                ->where('fiscal_company_id', $document->fiscal_company_id)
+                ->where('point_of_sale', $document->point_of_sale)
+                ->where('voucher_type', $document->voucher_type)
+                ->where('authorization_type', 'CAEA')
+                ->whereNotNull('document_number')
+                ->max('document_number');
+
+            $this->reserveDocumentNumber($document, max((int) data_get($last, 'CbteNro', 0), $localReservation) + 1);
         }
 
         $caea = $document->authorization_code;
@@ -759,6 +784,46 @@ class FiscalInvoiceService
             'started_at' => now(),
             'trace_id' => $traceId,
         ]);
+    }
+
+    private function reserveDocumentNumber(FiscalDocument $document, int $number): void
+    {
+        try {
+            DB::transaction(function () use ($document, $number): void {
+                $reservation = FiscalSequenceReservation::query()
+                    ->where('fiscal_document_id', $document->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($reservation !== null) {
+                    if ((int) $reservation->document_number !== $number) {
+                        throw new FiscalException('El documento ya tiene una reserva de numeración diferente.', 409, 'fiscal_number_reservation_mismatch');
+                    }
+                } else {
+                    FiscalSequenceReservation::query()->create([
+                        'fiscal_company_id' => $document->fiscal_company_id,
+                        'fiscal_document_id' => $document->id,
+                        'point_of_sale' => $document->point_of_sale,
+                        'voucher_type' => $document->voucher_type,
+                        'document_number' => $number,
+                    ]);
+                }
+
+                $document->forceFill(['document_number' => $number])->save();
+            });
+        } catch (FiscalException $exception) {
+            throw $exception;
+        } catch (QueryException $exception) {
+            $document->forceFill([
+                'status' => 'error',
+                'fiscal_status' => 'failed',
+                'error_code' => 'fiscal_number_reservation_conflict',
+                'error_message' => 'La reserva local de numeración ya existe para otro comprobante.',
+                'processed_at' => now(),
+            ])->save();
+
+            throw new FiscalException('La reserva local de numeración entró en conflicto; no se emitió el comprobante.', 409, 'fiscal_number_reservation_conflict', [], $exception);
+        }
     }
 
     private function finishAttempt(FiscalDocumentAttempt $attempt, string $status, float $startedAt, ?array $response = null, ?string $errorCode = null, ?string $errorMessage = null): void

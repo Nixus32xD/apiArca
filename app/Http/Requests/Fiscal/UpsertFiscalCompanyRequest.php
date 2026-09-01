@@ -17,7 +17,8 @@ class UpsertFiscalCompanyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'external_business_id' => ['required', 'string', 'max:120'],
+            'external_fiscal_id' => ['nullable', 'string', 'max:120'],
+            'external_business_id' => ['required_without:external_fiscal_id', 'string', 'max:120'],
             'cuit' => ['required', 'digits:11'],
             'legal_name' => ['required', 'string', 'max:255'],
             'fiscal_condition' => ['nullable', 'string', 'in:monotributo,responsable_inscripto,exento'],

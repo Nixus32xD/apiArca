@@ -17,8 +17,9 @@ class FiscalIvaBookRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'business_id' => ['required_without:external_business_id', 'string', 'max:120'],
-            'external_business_id' => ['required_without:business_id', 'string', 'max:120'],
+            'external_fiscal_id' => ['required_without_all:business_id,external_business_id', 'string', 'max:120'],
+            'business_id' => ['required_without_all:external_business_id,external_fiscal_id', 'string', 'max:120'],
+            'external_business_id' => ['required_without_all:business_id,external_fiscal_id', 'string', 'max:120'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
         ];
