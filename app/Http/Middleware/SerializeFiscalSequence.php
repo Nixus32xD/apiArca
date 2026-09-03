@@ -74,6 +74,24 @@ class SerializeFiscalSequence
         }
 
         $payload = $request->all();
+        $routeCompany = $request->route('company');
+
+        if (is_scalar($routeCompany) && (string) $routeCompany !== '') {
+            $company = $this->companyResolver->resolve((string) $routeCompany);
+            $pointOfSale = (int) ($payload['point_of_sale'] ?? 0);
+            $voucherType = (int) ($payload['cbte_type'] ?? 0);
+
+            if (! FiscalPointOfSale::isValid($pointOfSale)) {
+                throw new FiscalException('Point of sale is required.', 422, 'point_of_sale_required');
+            }
+
+            if ($voucherType < 1) {
+                throw new FiscalException('Voucher type is required.', 422, 'voucher_type_required');
+            }
+
+            return [$company, $pointOfSale, $voucherType, null, null];
+        }
+
         $company = $this->companyResolver->fromPayload($payload);
         $voucher = $this->voucherResolver->resolve($company, $payload);
         $pointOfSale = (int) ($payload['point_of_sale'] ?? $company->default_point_of_sale);
@@ -132,7 +150,7 @@ class SerializeFiscalSequence
 
         return match ($method) {
             'retry' => 'retry',
-            'reconcile' => 'reconcile',
+            'reconcile', 'reconcileSequence' => 'reconcile',
             default => 'store',
         };
     }

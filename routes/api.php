@@ -122,6 +122,10 @@ Route::prefix('fiscal')
         // detectar problemas de configuracion.
         Route::get('companies/{company}/diagnostics', [FiscalCompanyController::class, 'diagnostics']);
 
+        // Compara la secuencia local con el último comprobante autorizado en
+        // ARCA. No emite ni modifica comprobantes; se usa para recuperación.
+        Route::post('companies/{company}/sequences/reconcile', [FiscalCompanyController::class, 'reconcileSequence'])->middleware(SerializeFiscalSequence::class);
+
         // Prueba operativa de credenciales contra ARCA. Es ruta interna, no del
         // flujo normal de usuarios finales.
         Route::post('companies/{company}/credentials/test', [FiscalCompanyController::class, 'testCredentials']);

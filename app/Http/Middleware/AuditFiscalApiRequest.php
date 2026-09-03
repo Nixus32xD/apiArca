@@ -56,7 +56,10 @@ class AuditFiscalApiRequest
 
     private function resolveCompanyId(Request $request): ?int
     {
-        $businessId = $request->input('external_fiscal_id') ?: $request->input('business_id') ?: $request->input('external_business_id');
+        $businessId = $request->input('external_fiscal_id')
+            ?: $request->input('business_id')
+            ?: $request->input('external_business_id')
+            ?: $request->route('company');
 
         if (! is_scalar($businessId) || $businessId === '') {
             return null;

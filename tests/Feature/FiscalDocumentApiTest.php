@@ -35,6 +35,8 @@ beforeEach(function (): void {
         /** @var array<int, int> */
         public array $authorizedCompanyIds = [];
 
+        public int $lastAuthorizedNumber = 10;
+
         public ?FiscalException $authorizeException = null;
 
         public ?Throwable $authorizeThrowable = null;
@@ -83,7 +85,7 @@ beforeEach(function (): void {
                 'voucher_type' => $voucherType,
             ];
 
-            return ['CbteNro' => 10];
+            return ['CbteNro' => $this->lastAuthorizedNumber];
         }
 
         public function consult($company, $ticket, int $pointOfSale, int $voucherType, int $voucherNumber, $document = null, ?string $traceId = null): array
@@ -1025,6 +1027,69 @@ it('normalizes fiscal activities and points of sale for the SaaS', function (): 
         ->assertJsonPath('data.points_of_sale.0.type', 'CAE')
         ->assertJsonPath('data.points_of_sale.0.emission_type', 'CAE')
         ->assertJsonPath('data.points_of_sale.0.blocked', false);
+});
+
+it('reconciles a fiscal sequence against ARCA without reserving or issuing a voucher', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $this->wsfe->lastAuthorizedNumber = 22;
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/companies/{$company->external_business_id}/sequences/reconcile", [
+            'point_of_sale' => 2,
+            'cbte_type' => 11,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.company_id', $company->id)
+        ->assertJsonPath('data.environment', 'testing')
+        ->assertJsonPath('data.point_of_sale', 2)
+        ->assertJsonPath('data.voucher_type', 11)
+        ->assertJsonPath('data.arca_last_authorized_number', 22)
+        ->assertJsonPath('data.local_highest_number', null)
+        ->assertJsonPath('data.status', 'arca_ahead')
+        ->assertJsonPath('data.safe_to_issue', true)
+        ->assertJsonPath('data.next_number', 23)
+        ->assertJsonPath('data.requires_review', false);
+
+    expect(FiscalDocument::query()->count())->toBe(0)
+        ->and(FiscalSequenceReservation::query()->count())->toBe(0)
+        ->and($this->wsfe->authorizeCalls)->toBe(0)
+        ->and($this->wsfe->lastAuthorizedCalls)->toContain([
+            'fiscal_company_id' => $company->id,
+            'point_of_sale' => 2,
+            'voucher_type' => 11,
+        ])
+        ->and(FiscalApiLog::query()->where('direction', 'inbound')->value('fiscal_company_id'))->toBe($company->id);
+});
+
+it('fails closed when a local fiscal sequence is ahead of ARCA', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $this->wsfe->lastAuthorizedNumber = 10;
+    $unresolved = fiscalUnresolvedDocument($company, [
+        'point_of_sale' => 2,
+        'voucher_type' => 11,
+        'document_number' => 12,
+    ]);
+
+    $this
+        ->withToken('test-token')
+        ->postJson("/api/fiscal/companies/{$company->external_business_id}/sequences/reconcile", [
+            'point_of_sale' => 2,
+            'cbte_type' => 11,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.arca_last_authorized_number', 10)
+        ->assertJsonPath('data.local_document_number', 12)
+        ->assertJsonPath('data.local_highest_number', 12)
+        ->assertJsonPath('data.unresolved_document_id', $unresolved->id)
+        ->assertJsonPath('data.unresolved_document_number', 12)
+        ->assertJsonPath('data.status', 'local_unresolved_requires_reconcile')
+        ->assertJsonPath('data.safe_to_issue', false)
+        ->assertJsonPath('data.next_number', null)
+        ->assertJsonPath('data.requires_review', true);
+
+    expect($this->wsfe->authorizeCalls)->toBe(0)
+        ->and(FiscalSequenceReservation::query()->count())->toBe(0);
 });
 
 it('stores supplier purchases and returns IVA compras totals', function (): void {
