@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Fiscal;
 use App\Exceptions\Fiscal\FiscalException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Fiscal\GenerateFiscalCredentialCsrRequest;
+use App\Http\Requests\Fiscal\ReconcileFiscalSequenceRequest;
 use App\Http\Requests\Fiscal\StoreFiscalCredentialCertificateRequest;
 use App\Http\Requests\Fiscal\StoreFiscalCredentialRequest;
 use App\Http\Requests\Fiscal\UpsertFiscalCompanyRequest;
@@ -15,6 +16,7 @@ use App\Services\Fiscal\CredentialCsrService;
 use App\Services\Fiscal\CredentialStore;
 use App\Services\Fiscal\FiscalCompanyResolver;
 use App\Services\Fiscal\FiscalDiagnosticsService;
+use App\Services\Fiscal\FiscalSequenceRecoveryService;
 use App\Services\Fiscal\Support\ArcaErrorMapper;
 use App\Services\Fiscal\TokenCacheService;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +33,7 @@ class FiscalCompanyController extends Controller
         private readonly TokenCacheService $tokenCache,
         private readonly Wsfev1Client $wsfev1,
         private readonly FiscalDiagnosticsService $diagnosticsService,
+        private readonly FiscalSequenceRecoveryService $sequenceRecoveryService,
     ) {}
 
     public function upsert(UpsertFiscalCompanyRequest $request, ?string $company = null): JsonResponse
@@ -355,6 +358,37 @@ class FiscalCompanyController extends Controller
 
             return response()->json([
                 'message' => 'Unexpected fiscal diagnostics error.',
+                'error_code' => 'unexpected_error',
+            ], 500);
+        }
+    }
+
+    public function reconcileSequence(ReconcileFiscalSequenceRequest $request, string $company): JsonResponse
+    {
+        try {
+            $fiscalCompany = $this->companyResolver->resolve($company);
+            $data = $request->validated();
+
+            return response()->json([
+                'data' => [
+                    'company_id' => $fiscalCompany->id,
+                    'external_fiscal_id' => $fiscalCompany->external_business_id,
+                    'business_id' => $fiscalCompany->external_business_id,
+                    ...$this->sequenceRecoveryService->reconcile(
+                        $fiscalCompany,
+                        (int) $data['point_of_sale'],
+                        (int) $data['cbte_type'],
+                        $request->header('X-Trace-Id') ?: $request->header('X-Request-Id'),
+                    ),
+                ],
+            ]);
+        } catch (FiscalException $exception) {
+            return response()->json($exception->toPayload(), $exception->status());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Unexpected fiscal sequence reconciliation error.',
                 'error_code' => 'unexpected_error',
             ], 500);
         }
