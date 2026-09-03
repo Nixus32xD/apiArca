@@ -6,8 +6,8 @@ use App\Exceptions\Fiscal\FiscalException;
 use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 

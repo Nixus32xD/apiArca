@@ -43,6 +43,7 @@ class ArcaErrorMapper
             'arca_unexpected_error' => 'Ocurrió un error inesperado al comunicarse con ARCA. Revisar logs técnicos antes de reintentar.',
             'soap_fault' => $fallback ?: 'ARCA devolvió un SOAP fault. Revisar el detalle técnico y el estado del comprobante antes de reintentar.',
             'invalid_xml' => 'ARCA devolvió una respuesta XML inválida. Se debe consultar el comprobante antes de volver a emitir.',
+            'soap_response_missing_node',
             'wsfe_invalid_response' => 'ARCA devolvió una respuesta inválida para WSFEv1. Se debe consultar el comprobante antes de volver a emitir.',
             'wsaa_invalid_ticket',
             'wsaa_empty_ticket',
@@ -100,13 +101,17 @@ class ArcaErrorMapper
             return true;
         }
 
-        if ($code === 'arca_http_error' && in_array($statusCode, [502, 504], true)) {
+        // A 5xx response is received after the authorization request crossed
+        // the transport boundary. ARCA may have processed it even when the
+        // gateway cannot return a usable response.
+        if ($code === 'arca_http_error' && $statusCode !== null && $statusCode >= 500 && $statusCode <= 599) {
             return true;
         }
 
         return in_array($code, [
             'soap_fault',
             'invalid_xml',
+            'soap_response_missing_node',
             'wsfe_invalid_response',
             'arca_unexpected_error',
         ], true);

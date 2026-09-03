@@ -62,6 +62,23 @@ La sucursal pertenece al SaaS consumidor: `apiArca` no incorpora `branch_id` al 
 
 Las integraciones nuevas envían `external_fiscal_id`, `point_of_sale` explícito e `idempotency_key`. `default_point_of_sale` es sólo fallback de compatibilidad, no representa una sucursal. La secuencia se aísla por identidad fiscal, ambiente, PV y tipo de comprobante; por eso el mismo CUIT puede usar PV 5/PV 8 sin mezclar números y dos CUIT pueden compartir PV/número sin conflicto.
 
+### Secuencia, reintentos y conciliación
+
+La emisión nueva se bloquea con `409 fiscal_sequence_requires_reconcile` si
+otro comprobante numerado de la misma secuencia queda `processing` o
+`uncertain`. Una repetición del mismo `idempotency_key` sólo devuelve el
+documento existente y no vuelve a llamar a ARCA. `retry` excluye únicamente su
+propio target para poder conciliarlo; cualquier otro hueco lo bloquea.
+`reconcile` siempre puede consultar su target, incluso si existen varios
+huecos históricos, para permitir su saneamiento.
+
+Las rutas por ID mantienen compatibilidad con clientes legacy. Para el modo
+production-safe, configurar `FISCAL_REQUIRE_COMPANY_SCOPE_FOR_ID_ROUTES=true`
+y enviar `external_fiscal_id` (o los aliases legacy) en `show`, `pdf`, `qr`,
+`email`, `retry` y `reconcile`. Los `api_clients` con
+`external_fiscal_ids` siempre se validan contra la identidad del documento,
+incluso cuando ese flag está apagado.
+
 ### Admin fiscal
 
 - `GET /api/admin/`: renderiza una vista HTML operativa para soporte y

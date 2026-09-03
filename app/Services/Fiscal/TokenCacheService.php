@@ -6,9 +6,9 @@ use App\Exceptions\Fiscal\FiscalException;
 use App\Models\AccessTicket;
 use App\Models\FiscalCompany;
 use App\Services\Fiscal\Contracts\WsaaClient;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Contracts\Cache\LockTimeoutException;
 
 class TokenCacheService
 {
