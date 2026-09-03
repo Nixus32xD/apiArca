@@ -287,14 +287,19 @@ class FiscalInvoiceService
             $this->finishAttempt($attempt, 'failed', $startedAt, errorCode: 'unexpected_error', errorMessage: $exception->getMessage());
 
             $document->forceFill([
-                'status' => 'error',
-                'fiscal_status' => 'failed',
+                // The authorization call has already been invoked. Without a
+                // confirmed ARCA response, preserve the number and require a
+                // FECompConsultar instead of enabling a blind re-issue.
+                'status' => 'uncertain',
+                'fiscal_status' => 'uncertain',
                 'error_code' => 'unexpected_error',
                 'error_message' => $exception->getMessage(),
                 'processed_at' => now(),
             ])->save();
 
-            $this->recordEvent($document, 'error', $exception->getMessage());
+            $this->recordEvent($document, 'uncertain', $exception->getMessage(), [
+                'error_code' => 'unexpected_error',
+            ]);
 
             return $document->refresh();
         }

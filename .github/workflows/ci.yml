@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: apiarca_testing
+          MYSQL_USER: apiarca
+          MYSQL_PASSWORD: apiarca
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: apiarca_testing
+      DB_USERNAME: apiarca
+      DB_PASSWORD: apiarca
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      FISCAL_API_TOKENS: test-token
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, curl, pdo_mysql, pcntl
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare testing database
+        run: php artisan migrate:fresh --force
+
+      - name: Check PHP formatting
+        run: vendor/bin/pint --test
+
+      - name: Run Laravel and Pest suite
+        run: php artisan test
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build frontend assets
+        run: npm install --no-audit --no-fund && npm run build

@@ -9,7 +9,7 @@ use Throwable;
 
 class FiscalApiLogger
 {
-    private const SENSITIVE_XML_FIELD = 'token|sign|in0|certificate|private_key|passphrase|password|secret';
+    private const SENSITIVE_XML_FIELD = 'token|sign|in0|certificate|private_key|passphrase|password|secret|authorization';
 
     /**
      * @param  array<string, mixed>|string|null  $request
@@ -59,7 +59,7 @@ class FiscalApiLogger
         $sanitized = [];
 
         foreach ($payload as $key => $value) {
-            if (is_string($key) && preg_match('/certificate|private_key|passphrase|token|sign|password|secret/i', $key)) {
+            if (is_string($key) && preg_match('/certificate|private_key|passphrase|token|sign|password|secret|authorization/i', $key)) {
                 $sanitized[$key] = '[redacted]';
 
                 continue;
@@ -90,9 +90,20 @@ class FiscalApiLogger
             $payload,
         );
 
-        return (string) preg_replace_callback(
+        $payload = (string) preg_replace_callback(
             "/(?<name>\\b(?:{$field}))\\s*=\\s*&quot;.*?&quot;/is",
             fn (array $match): string => $match['name'].'=&quot;[redacted]&quot;',
+            $payload,
+        );
+        $payload = (string) preg_replace(
+            "/\\bAuthorization\\s*:\\s*Bearer\\s+[^\\s,;\"']+/i",
+            'Authorization: Bearer [redacted]',
+            $payload,
+        );
+
+        return (string) preg_replace(
+            '/-----BEGIN(?: [A-Z]+)? (?:PRIVATE KEY|CERTIFICATE)-----.*?-----END(?: [A-Z]+)? (?:PRIVATE KEY|CERTIFICATE)-----/is',
+            '[redacted-pem]',
             $payload,
         );
     }

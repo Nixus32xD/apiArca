@@ -9,7 +9,10 @@ use App\Models\FiscalDocument;
 use App\Models\FiscalSequenceReservation;
 use App\Services\Fiscal\Contracts\Wsfev1Client;
 use App\Services\Fiscal\FiscalCompanyResolver;
+use App\Services\Fiscal\FiscalInvoiceService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 beforeEach(function (): void {
     if (config('database.default') === 'sqlite' && ! extension_loaded('pdo_sqlite')) {
@@ -34,6 +37,8 @@ beforeEach(function (): void {
 
         public ?FiscalException $authorizeException = null;
 
+        public ?Throwable $authorizeThrowable = null;
+
         public ?FiscalException $consultException = null;
 
         public array $consultResponse = [
@@ -50,6 +55,10 @@ beforeEach(function (): void {
 
             if ($this->authorizeException) {
                 throw $this->authorizeException;
+            }
+
+            if ($this->authorizeThrowable) {
+                throw $this->authorizeThrowable;
             }
 
             return [
@@ -456,6 +465,231 @@ it('returns the existing document for the same idempotency key', function (): vo
         ->and($this->wsfe->authorizeCalls)->toBe(1);
 });
 
+it('blocks a new emission when another numbered document in the same sequence is uncertain', function (): void {
+    $company = fiscalCompanyWithTicket();
+    fiscalUnresolvedDocument($company, ['idempotency_key' => 'gap-a']);
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id, idempotencyKey: 'gap-b'))
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'fiscal_sequence_requires_reconcile');
+
+    expect(FiscalDocument::query()->count())->toBe(1)
+        ->and($this->wsfe->authorizeCalls)->toBe(0);
+});
+
+it('does not let a retry hide another unresolved document in the same sequence', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $first = fiscalUnresolvedDocument($company, ['idempotency_key' => 'gap-a', 'document_number' => 11]);
+    $retryTarget = fiscalUnresolvedDocument($company, [
+        'idempotency_key' => 'retry-b',
+        'document_number' => 12,
+        'status' => 'error',
+        'fiscal_status' => 'failed',
+        'error_code' => 'arca_voucher_not_found',
+    ]);
+
+    $this->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$retryTarget->id}/retry")
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'fiscal_sequence_requires_reconcile')
+        ->assertJsonPath('context.document_id', $first->id);
+
+    expect($this->wsfe->consultCalls)->toBe(0)
+        ->and($this->wsfe->authorizeCalls)->toBe(0);
+});
+
+it('allows reconciliation of its uncertain target even with unresolved sequence records', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $target = fiscalUnresolvedDocument($company, ['idempotency_key' => 'gap-a']);
+    fiscalUnresolvedDocument($company, ['idempotency_key' => 'gap-b', 'document_number' => 12]);
+
+    $this->withToken('test-token')
+        ->postJson("/api/fiscal/documents/{$target->id}/reconcile")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'authorized');
+
+    expect($this->wsfe->consultCalls)->toBe(1);
+});
+
+it('isolates unresolved sequence gaps by point of sale voucher type and fiscal company', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $otherCompany = fiscalCompanyWithTicket(['external_business_id' => 'business-2', 'cuit' => '20333444559']);
+    fiscalUnresolvedDocument($company, ['idempotency_key' => 'pv1-invoice-c']);
+
+    $pv2 = fiscalPayload($company->external_business_id, idempotencyKey: 'pv2-invoice-c');
+    $pv2['point_of_sale'] = 2;
+    $this->withToken('test-token')->postJson('/api/fiscal/documents', $pv2)
+        ->assertCreated()
+        ->assertJsonPath('data.point_of_sale', 2);
+
+    $creditNote = fiscalPayload($company->external_business_id, idempotencyKey: 'pv1-credit-c');
+    $creditNote['cbte_type'] = 13;
+    $creditNote['document_type'] = 'credit_note_c';
+    $creditNote['associated_vouchers'] = [['type' => 11, 'point_of_sale' => 1, 'number' => 10]];
+    $this->withToken('test-token')->postJson('/api/fiscal/documents', $creditNote)
+        ->assertCreated()
+        ->assertJsonPath('data.cbte_type', 13);
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($otherCompany->external_business_id, idempotencyKey: 'other-company'))
+        ->assertCreated()
+        ->assertJsonPath('data.company.id', $otherCompany->id);
+});
+
+it('replays an uncertain idempotency key without another authorization', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $existing = fiscalUnresolvedDocument($company, ['idempotency_key' => 'uncertain-idempotency']);
+
+    $response = $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id, idempotencyKey: 'uncertain-idempotency'));
+
+    $response->assertOk()
+        ->assertJsonPath('meta.idempotent_replay', true)
+        ->assertJsonPath('data.id', $existing->id);
+
+    expect(FiscalDocument::query()->count())->toBe(1)
+        ->and($this->wsfe->authorizeCalls)->toBe(0);
+});
+
+it('enforces idempotency at the database boundary for competing persistence attempts', function (): void {
+    $company = fiscalCompanyWithTicket();
+    fiscalUnresolvedDocument($company, ['idempotency_key' => 'database-idempotency']);
+
+    expect(fn () => fiscalUnresolvedDocument($company, ['idempotency_key' => 'database-idempotency']))
+        ->toThrow(QueryException::class);
+
+    expect(FiscalDocument::query()->where('fiscal_company_id', $company->id)->where('idempotency_key', 'database-idempotency')->count())
+        ->toBe(1);
+});
+
+it('allows two MySQL processes to issue one idempotent fiscal operation only once', function (): void {
+    if (config('database.default') !== 'mysql' || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Requires MySQL and pcntl; it runs in the CI concurrency environment.');
+    }
+
+    $company = fiscalCompanyWithTicket();
+    $payload = fiscalPayload($company->external_business_id, 'forked-idempotency-key');
+    $resultFiles = [tempnam(sys_get_temp_dir(), 'fiscal-idem-'), tempnam(sys_get_temp_dir(), 'fiscal-idem-')];
+    $pids = [];
+
+    try {
+        foreach ($resultFiles as $resultFile) {
+            $pid = pcntl_fork();
+
+            if ($pid === -1) {
+                throw new RuntimeException('Could not fork fiscal idempotency test process.');
+            }
+
+            if ($pid === 0) {
+                DB::disconnect();
+
+                try {
+                    app(FiscalInvoiceService::class)->issue($payload);
+                    file_put_contents($resultFile, 'ok');
+                    exit(0);
+                } catch (Throwable $exception) {
+                    file_put_contents($resultFile, 'error:'.$exception::class);
+                    exit(1);
+                }
+            }
+
+            $pids[] = $pid;
+        }
+
+        foreach ($pids as $pid) {
+            pcntl_waitpid($pid, $status);
+            expect(pcntl_wexitstatus($status))->toBe(0);
+        }
+
+        DB::disconnect();
+        expect(array_map('file_get_contents', $resultFiles))->toBe(['ok', 'ok'])
+            ->and(FiscalDocument::query()->where('fiscal_company_id', $company->id)->where('idempotency_key', 'forked-idempotency-key')->count())->toBe(1)
+            ->and(FiscalDocument::query()->where('fiscal_company_id', $company->id)->sole()->attempts()->where('operation', 'FECAESolicitar')->count())->toBe(1);
+    } finally {
+        foreach ($resultFiles as $resultFile) {
+            if (is_string($resultFile) && is_file($resultFile)) {
+                unlink($resultFile);
+            }
+        }
+    }
+});
+
+it('forbids reusing a reserved number inside one fiscal sequence', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $first = fiscalUnresolvedDocument($company, ['idempotency_key' => 'reservation-a']);
+    $second = fiscalUnresolvedDocument($company, ['idempotency_key' => 'reservation-b', 'document_number' => 12]);
+
+    FiscalSequenceReservation::query()->create([
+        'fiscal_company_id' => $company->id,
+        'fiscal_document_id' => $first->id,
+        'point_of_sale' => 1,
+        'voucher_type' => 11,
+        'document_number' => 11,
+    ]);
+
+    expect(fn () => FiscalSequenceReservation::query()->create([
+        'fiscal_company_id' => $company->id,
+        'fiscal_document_id' => $second->id,
+        'point_of_sale' => 1,
+        'voucher_type' => 11,
+        'document_number' => 11,
+    ]))->toThrow(QueryException::class);
+});
+
+it('protects every document id route from an explicitly mismatched fiscal company scope', function (string $operation): void {
+    $first = fiscalCompanyWithTicket();
+    $second = fiscalCompanyWithTicket(['external_business_id' => 'scope-second', 'cuit' => '20333444559']);
+    $document = fiscalUnresolvedDocument($first);
+    $url = "/api/fiscal/documents/{$document->id}";
+
+    $response = match ($operation) {
+        'show' => $this->withToken('test-token')->getJson("{$url}?external_fiscal_id={$second->external_business_id}"),
+        'pdf' => $this->withToken('test-token')->get("{$url}/pdf?external_fiscal_id={$second->external_business_id}"),
+        'qr' => $this->withToken('test-token')->getJson("{$url}/qr?external_fiscal_id={$second->external_business_id}"),
+        default => $this->withToken('test-token')->postJson("{$url}/{$operation}", ['external_fiscal_id' => $second->external_business_id]),
+    };
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'company_scope_mismatch');
+})->with(['show', 'pdf', 'qr', 'email', 'retry', 'reconcile']);
+
+it('does not allow a scoped API client to access another fiscal identity by document id', function (): void {
+    $allowed = fiscalCompanyWithTicket(['external_business_id' => 'scoped-allowed']);
+    $denied = fiscalCompanyWithTicket(['external_business_id' => 'scoped-denied', 'cuit' => '20333444559']);
+    $document = fiscalUnresolvedDocument($denied);
+    config([
+        'fiscal.api_tokens' => [],
+        'fiscal.api_clients' => [[
+            'id' => 'scoped-client',
+            'token' => 'scoped-token',
+            'external_fiscal_ids' => [$allowed->external_business_id],
+        ]],
+    ]);
+
+    $this->withToken('scoped-token')
+        ->getJson("/api/fiscal/documents/{$document->id}")
+        ->assertForbidden()
+        ->assertJsonPath('error_code', 'fiscal_company_forbidden');
+});
+
+it('allows the same CUIT in separate fiscal environments', function (): void {
+    $testing = fiscalCompanyWithTicket(['external_business_id' => 'same-cuit-testing']);
+    $production = FiscalCompany::query()->create([
+        'external_business_id' => 'same-cuit-production',
+        'cuit' => $testing->cuit,
+        'legal_name' => 'Empresa Demo SA',
+        'fiscal_condition' => 'monotributo',
+        'environment' => 'production',
+        'default_point_of_sale' => 1,
+        'default_voucher_type' => 11,
+        'enabled' => true,
+    ]);
+
+    expect($production->id)->not->toBe($testing->id)
+        ->and($production->cuit)->toBe($testing->cuit)
+        ->and($production->environment)->toBe('production');
+});
+
 it('marks HTTP 504 from ARCA as uncertain and stores the expected retry guidance', function (): void {
     $company = fiscalCompanyWithTicket();
     $this->wsfe->authorizeException = new FiscalException('raw upstream message', 502, 'arca_http_error', [
@@ -478,6 +712,30 @@ it('marks HTTP 504 from ARCA as uncertain and stores the expected retry guidance
     expect($document->authorization_type)->toBe('CAE')
         ->and($document->raw_request)->not->toBeNull();
 });
+
+it('marks ambiguous authorization failures as uncertain after FECAESolicitar starts', function (Throwable $exception): void {
+    $company = fiscalCompanyWithTicket();
+
+    if ($exception instanceof FiscalException) {
+        $this->wsfe->authorizeException = $exception;
+    } else {
+        $this->wsfe->authorizeThrowable = $exception;
+    }
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id))
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'uncertain')
+        ->assertJsonPath('data.fiscal_status', 'uncertain');
+})->with([
+    'connection timeout' => new FiscalException('timeout', 504, 'arca_timeout'),
+    'http 502' => new FiscalException('bad gateway', 502, 'arca_http_error', ['status_code' => 502]),
+    'soap fault' => new FiscalException('fault', 502, 'soap_fault'),
+    'invalid xml' => new FiscalException('invalid xml', 502, 'invalid_xml'),
+    'missing wsfe response node' => new FiscalException('missing node', 502, 'soap_response_missing_node'),
+    'invalid wsfe response' => new FiscalException('invalid response', 502, 'wsfe_invalid_response'),
+    'unexpected post-send failure' => new RuntimeException('post-send failure'),
+]);
 
 it('blocks retry when reconciliation is still uncertain', function (): void {
     $company = fiscalCompanyWithTicket();
@@ -1125,6 +1383,21 @@ function fiscalCompanyForCredentialOnboarding(string $businessId = 'business-csr
     ]);
 }
 
+function fiscalUnresolvedDocument(FiscalCompany $company, array $overrides = []): FiscalDocument
+{
+    return FiscalDocument::query()->create([
+        'fiscal_company_id' => $company->id,
+        'point_of_sale' => 1,
+        'voucher_type' => 11,
+        'document_number' => 11,
+        'status' => 'uncertain',
+        'fiscal_status' => 'uncertain',
+        'authorization_type' => 'CAE',
+        'idempotency_key' => 'unresolved-'.uniqid(),
+        ...$overrides,
+    ]);
+}
+
 function fiscalCertificateForCredential(FiscalCredential $credential): string
 {
     $privateKey = openssl_pkey_get_private($credential->private_key);
@@ -1194,7 +1467,7 @@ function fiscalOpenSslConfig(): array
 /**
  * @return array<string, mixed>
  */
-function fiscalPayload(string $businessId): array
+function fiscalPayload(string $businessId, string $idempotencyKey = 'idem-100'): array
 {
     return [
         'business_id' => $businessId,
@@ -1211,7 +1484,7 @@ function fiscalPayload(string $businessId): array
         ],
         'currency' => 'PES',
         'currency_rate' => 1,
-        'idempotency_key' => 'idem-100',
+        'idempotency_key' => $idempotencyKey,
         'metadata' => [
             'source' => 'tests',
         ],

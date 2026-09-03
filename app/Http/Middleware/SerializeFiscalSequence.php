@@ -23,7 +23,8 @@ class SerializeFiscalSequence
     public function handle(Request $request, Closure $next): Response
     {
         [$company, $pointOfSale, $voucherType, $idempotencyKey, $document] = $this->context($request);
-        $this->assertNoUnresolvedGap($company, $pointOfSale, $voucherType, $idempotencyKey, $document);
+        $operation = $this->operation($request);
+        $this->assertNoUnresolvedGap($company, $pointOfSale, $voucherType, $idempotencyKey, $document, $operation);
 
         $storeName = (string) (config('fiscal-sequence.store') ?: config('cache.default'));
         $store = Cache::store($storeName);
@@ -43,9 +44,9 @@ class SerializeFiscalSequence
         );
 
         try {
-            return $lock->block(max(0, (int) config('fiscal-sequence.wait_seconds', 15)), function () use ($request, $next, $company, $pointOfSale, $voucherType, $idempotencyKey, $document): Response {
+            return $lock->block(max(0, (int) config('fiscal-sequence.wait_seconds', 15)), function () use ($request, $next, $company, $pointOfSale, $voucherType, $idempotencyKey, $document, $operation): Response {
                 $document?->refresh();
-                $this->assertNoUnresolvedGap($company, $pointOfSale, $voucherType, $idempotencyKey, $document);
+                $this->assertNoUnresolvedGap($company, $pointOfSale, $voucherType, $idempotencyKey, $document, $operation);
 
                 return $next($request);
             });
@@ -82,19 +83,38 @@ class SerializeFiscalSequence
         return [$company, $pointOfSale, (int) $voucher['voucher_type'], isset($payload['idempotency_key']) ? (string) $payload['idempotency_key'] : null, null];
     }
 
-    private function assertNoUnresolvedGap(FiscalCompany $company, int $pointOfSale, int $voucherType, ?string $idempotencyKey, ?FiscalDocument $target): void
-    {
+    private function assertNoUnresolvedGap(
+        FiscalCompany $company,
+        int $pointOfSale,
+        int $voucherType,
+        ?string $idempotencyKey,
+        ?FiscalDocument $target,
+        string $operation,
+    ): void {
+        // Reconciliation is a read/repair operation. It must remain available
+        // for every unresolved document in a historical sequence, including its
+        // own uncertain target, while the sequence lock still serializes it.
+        if ($operation === 'reconcile') {
+            return;
+        }
+
         $unresolved = FiscalDocument::query()
             ->where('fiscal_company_id', $company->id)
             ->where('point_of_sale', $pointOfSale)
             ->where('voucher_type', $voucherType)
             ->whereNotNull('document_number')
             ->whereIn('status', ['processing', 'uncertain'])
-            ->when($target, fn ($query) => $query->whereKey($target->id))
+            // A repeated POST for an existing idempotency key is a retrieval,
+            // not a new authorization. Exclude only that exact operation, not
+            // any other unresolved document in the sequence.
+            ->when($operation === 'store' && $idempotencyKey !== null, fn ($query) => $query->where('idempotency_key', '!=', $idempotencyKey))
+            // Retry reconciles its own target before deciding whether a new
+            // FECAESolicitar is safe. A different gap must still block it.
+            ->when($operation === 'retry' && $target !== null, fn ($query) => $query->whereKeyNot($target->id))
             ->latest('id')
             ->first();
 
-        if ($unresolved === null || ($idempotencyKey !== null && hash_equals($unresolved->idempotency_key, $idempotencyKey))) {
+        if ($unresolved === null) {
             return;
         }
 
@@ -103,6 +123,17 @@ class SerializeFiscalSequence
             'document_number' => $unresolved->document_number,
             'requires_reconcile' => true,
         ]);
+    }
+
+    private function operation(Request $request): string
+    {
+        $method = $request->route()?->getActionMethod();
+
+        return match ($method) {
+            'retry' => 'retry',
+            'reconcile' => 'reconcile',
+            default => 'store',
+        };
     }
 
     private function lockKey(FiscalCompany $company, int $pointOfSale, int $voucherType): string
