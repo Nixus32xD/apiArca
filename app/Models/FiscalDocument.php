@@ -47,6 +47,7 @@ class FiscalDocument extends Model
         'caea_report_deadline',
         'fiscal_status',
         'idempotency_key',
+        'idempotency_payload_hash',
         'normalized_payload',
         'request_payload',
         'response_payload',

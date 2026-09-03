@@ -47,6 +47,16 @@ jobs:
           extensions: mbstring, dom, curl, pdo_mysql, pcntl
           coverage: none
 
+      - name: Resolve Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-8.3-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-php-8.3-composer-
+
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
@@ -64,4 +74,5 @@ jobs:
           node-version: 22
 
       - name: Build frontend assets
-        run: npm install --no-audit --no-fund && npm run build
+        # apiArca has no package-lock.json yet, so npm ci would fail.
+        run: npm install --no-package-lock --no-audit --no-fund && npm run build

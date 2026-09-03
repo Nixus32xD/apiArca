@@ -219,6 +219,7 @@ it('marks fiscal document email failures for queue retry without resending alrea
         ->and($document->email_last_error)->toBe('transient pdf failure');
 
     $sent = module3AuthorizedDocument($company, [
+        'document_number' => 2,
         'email_to' => 'cliente@example.test',
         'email_status' => 'sent',
         'email_attempts' => 4,

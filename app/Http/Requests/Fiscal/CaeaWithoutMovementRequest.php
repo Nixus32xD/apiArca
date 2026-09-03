@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Fiscal;
 
+use App\Support\FiscalPointOfSale;
 use Illuminate\Foundation\Http\FormRequest;
 
 class CaeaWithoutMovementRequest extends FormRequest
@@ -18,7 +19,7 @@ class CaeaWithoutMovementRequest extends FormRequest
     {
         return [
             'caea' => ['required', 'string', 'digits:14'],
-            'point_of_sale' => ['required', 'integer', 'min:1', 'max:99998'],
+            'point_of_sale' => FiscalPointOfSale::requiredRules(),
             'cbte_type' => ['required', 'integer', 'min:1'],
         ];
     }

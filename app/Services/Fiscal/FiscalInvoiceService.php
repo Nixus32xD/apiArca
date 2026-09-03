@@ -38,18 +38,20 @@ class FiscalInvoiceService
         $this->credentialStore->activeFor($company);
 
         $idempotencyKey = (string) $payload['idempotency_key'];
+        $normalized = $this->normalizePayload($company, $payload);
+        $authorizationType = strtoupper((string) ($payload['authorization_type'] ?? 'CAE'));
+        $payloadHash = $this->idempotencyPayloadHash($normalized, $this->authorizationContextFromPayload($payload, $authorizationType));
         $existing = $company->documents()->where('idempotency_key', $idempotencyKey)->first();
 
         if ($existing) {
+            $this->assertCompatibleIdempotencyPayload($existing, $payloadHash);
+
             return ['document' => $existing->refresh(), 'idempotent_replay' => true];
         }
 
-        $normalized = $this->normalizePayload($company, $payload);
-        $authorizationType = strtoupper((string) ($payload['authorization_type'] ?? 'CAE'));
-
         try {
             /** @var FiscalDocument $document */
-            $document = DB::transaction(function () use ($company, $payload, $normalized, $idempotencyKey, $authorizationType): FiscalDocument {
+            $document = DB::transaction(function () use ($company, $payload, $normalized, $idempotencyKey, $payloadHash, $authorizationType): FiscalDocument {
                 $document = $company->documents()->create([
                     'origin_type' => $normalized['origin']['type'],
                     'origin_id' => $normalized['origin']['id'],
@@ -84,6 +86,7 @@ class FiscalInvoiceService
                     'caea_due_date' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.due_date') : null,
                     'caea_report_deadline' => $authorizationType === 'CAEA' ? data_get($payload, 'caea.report_deadline') : null,
                     'idempotency_key' => $idempotencyKey,
+                    'idempotency_payload_hash' => $payloadHash,
                     'normalized_payload' => $normalized,
                     'metadata' => $payload['metadata'] ?? null,
                 ]);
@@ -96,6 +99,8 @@ class FiscalInvoiceService
             $existing = $company->documents()->where('idempotency_key', $idempotencyKey)->first();
 
             if ($existing) {
+                $this->assertCompatibleIdempotencyPayload($existing, $payloadHash);
+
                 return ['document' => $existing->refresh(), 'idempotent_replay' => true];
             }
 
@@ -457,6 +462,137 @@ class FiscalInvoiceService
         ]);
 
         return $document->refresh();
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, mixed>  $authorizationContext
+     */
+    private function idempotencyPayloadHash(array $normalized, array $authorizationContext): string
+    {
+        // Metadata is operational context supplied by the consumer, not the
+        // fiscal operation that is persisted and authorized by ARCA.
+        unset($normalized['metadata']);
+
+        $canonical = $this->canonicalizePayload([
+            'authorization' => $authorizationContext,
+            'normalized_payload' => $normalized,
+        ]);
+
+        return hash('sha256', (string) json_encode(
+            $canonical,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
+        ));
+    }
+
+    private function assertCompatibleIdempotencyPayload(FiscalDocument $document, string $payloadHash): void
+    {
+        $storedHash = $document->idempotency_payload_hash;
+
+        if ($storedHash === null) {
+            $normalized = $document->normalized_payload;
+
+            if (! is_array($normalized) || $normalized === []) {
+                throw new FiscalException(
+                    'La misma clave de idempotencia ya fue usada por un comprobante histórico cuyo contenido fiscal no puede verificarse.',
+                    409,
+                    'idempotency_payload_mismatch',
+                );
+            }
+
+            $storedHash = $this->idempotencyPayloadHash(
+                $normalized,
+                $this->authorizationContextFromDocument($document),
+            );
+
+            // Safely complete records created before the migration only after
+            // their immutable normalized payload can be reconstructed.
+            $document->forceFill(['idempotency_payload_hash' => $storedHash])->save();
+        }
+
+        if (hash_equals((string) $storedHash, $payloadHash)) {
+            return;
+        }
+
+        throw new FiscalException(
+            'La misma clave de idempotencia ya fue utilizada para otro contenido fiscal.',
+            409,
+            'idempotency_payload_mismatch',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function authorizationContextFromPayload(array $payload, string $authorizationType): array
+    {
+        if ($authorizationType !== 'CAEA') {
+            return ['type' => 'CAE'];
+        }
+
+        return [
+            'type' => 'CAEA',
+            'code' => $this->nullableScalar(data_get($payload, 'caea.code')),
+            'period' => $this->nullableScalar(data_get($payload, 'caea.period')),
+            'order' => $this->nullableInteger(data_get($payload, 'caea.order')),
+            'from' => $this->nullableInteger(data_get($payload, 'caea.from')),
+            'to' => $this->nullableInteger(data_get($payload, 'caea.to')),
+            'due_date' => $this->nullableAfipDate(data_get($payload, 'caea.due_date')),
+            'report_deadline' => $this->nullableAfipDate(data_get($payload, 'caea.report_deadline')),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function authorizationContextFromDocument(FiscalDocument $document): array
+    {
+        $authorizationType = strtoupper((string) ($document->authorization_type ?: 'CAE'));
+
+        if ($authorizationType !== 'CAEA') {
+            return ['type' => 'CAE'];
+        }
+
+        return [
+            'type' => 'CAEA',
+            'code' => $this->nullableScalar($document->authorization_code),
+            'period' => $this->nullableScalar($document->caea_period),
+            'order' => $this->nullableInteger($document->caea_order),
+            'from' => $this->nullableInteger($document->caea_from),
+            'to' => $this->nullableInteger($document->caea_to),
+            'due_date' => $document->caea_due_date?->format('Ymd'),
+            'report_deadline' => $document->caea_report_deadline?->format('Ymd'),
+        ];
+    }
+
+    private function nullableAfipDate(mixed $value): ?string
+    {
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return null;
+        }
+
+        return $this->requestBuilder->afipDate((string) $value);
+    }
+
+    private function nullableInteger(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    private function canonicalizePayload(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->canonicalizePayload($item);
+        }
+
+        if (! array_is_list($value)) {
+            ksort($value);
+        }
+
+        return $value;
     }
 
     /**
