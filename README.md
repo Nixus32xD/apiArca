@@ -424,7 +424,18 @@ Respuesta de ejemplo:
 }
 ```
 
-Si se repite la misma `idempotency_key` para la misma empresa, la API devuelve el comprobante existente con `meta.idempotent_replay=true` y no llama de nuevo a ARCA.
+Si se repite la misma `idempotency_key` para la misma empresa con el mismo
+contenido fiscal normalizado, la API devuelve el comprobante existente con
+`meta.idempotent_replay=true` y no llama de nuevo a ARCA. Si cambian importes,
+receptor, punto de venta u otro dato fiscal normalizado, responde `409`
+`idempotency_payload_mismatch` sin emitir un segundo comprobante. El hash
+ignora metadata y orden de propiedades JSON, pero conserva todo el contenido
+fiscal relevante.
+
+Los comprobantes históricos conservan el hash nullable: ante el primer replay
+se completa desde su `normalized_payload`. Si un registro histórico no permite
+reconstruir ese contenido, la API rechaza ese replay con `409` antes de emitir;
+el comprobante histórico no se modifica ni se vuelve a autorizar en ARCA.
 
 ## PDF, QR y email fiscal
 

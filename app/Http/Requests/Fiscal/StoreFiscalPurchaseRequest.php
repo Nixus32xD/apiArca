@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Fiscal;
 
+use App\Support\FiscalPointOfSale;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreFiscalPurchaseRequest extends FormRequest
@@ -29,7 +30,7 @@ class StoreFiscalPurchaseRequest extends FormRequest
             'voucher_date' => ['required', 'date'],
             'accounting_date' => ['nullable', 'date'],
             'cbte_type' => ['required', 'integer', 'min:1'],
-            'point_of_sale' => ['required', 'integer', 'min:1', 'max:99998'],
+            'point_of_sale' => FiscalPointOfSale::requiredRules(),
             'document_number' => ['required', 'integer', 'min:1'],
             'supplier' => ['required', 'array'],
             'supplier.cuit' => ['required', 'digits:11'],

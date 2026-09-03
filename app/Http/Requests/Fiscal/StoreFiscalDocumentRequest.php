@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Fiscal;
 
+use App\Support\FiscalPointOfSale;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreFiscalDocumentRequest extends FormRequest
@@ -31,7 +32,7 @@ class StoreFiscalDocumentRequest extends FormRequest
             'document_kind' => ['nullable', 'string', 'in:invoice,debit_note,credit_note'],
             'document_type' => ['nullable', 'string', 'max:80'],
             'authorization_type' => ['nullable', 'string', 'in:CAE,CAEA,cae,caea'],
-            'point_of_sale' => ['nullable', 'integer', 'min:1', 'max:99998'],
+            'point_of_sale' => FiscalPointOfSale::nullableRules(),
             'concept' => ['nullable', 'integer', 'in:1,2,3'],
             'cbte_type' => ['nullable', 'integer', 'min:1'],
             'customer' => ['nullable', 'array'],
@@ -80,8 +81,8 @@ class StoreFiscalDocumentRequest extends FormRequest
             'associated_vouchers.*' => ['array'],
             'associated_vouchers.*.type' => ['nullable', 'integer', 'min:1'],
             'associated_vouchers.*.Tipo' => ['nullable', 'integer', 'min:1'],
-            'associated_vouchers.*.point_of_sale' => ['nullable', 'integer', 'min:1', 'max:99998'],
-            'associated_vouchers.*.PtoVta' => ['nullable', 'integer', 'min:1', 'max:99998'],
+            'associated_vouchers.*.point_of_sale' => FiscalPointOfSale::nullableRules(),
+            'associated_vouchers.*.PtoVta' => FiscalPointOfSale::nullableRules(),
             'associated_vouchers.*.number' => ['nullable', 'integer', 'min:1'],
             'associated_vouchers.*.Nro' => ['nullable', 'integer', 'min:1'],
             'associated_vouchers.*.cuit' => ['nullable', 'digits:11'],

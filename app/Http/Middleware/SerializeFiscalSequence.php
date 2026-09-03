@@ -7,6 +7,7 @@ use App\Models\FiscalCompany;
 use App\Models\FiscalDocument;
 use App\Services\Fiscal\FiscalCompanyResolver;
 use App\Services\Fiscal\FiscalVoucherResolver;
+use App\Support\FiscalPointOfSale;
 use Closure;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
@@ -76,7 +77,7 @@ class SerializeFiscalSequence
         $company = $this->companyResolver->fromPayload($payload);
         $voucher = $this->voucherResolver->resolve($company, $payload);
         $pointOfSale = (int) ($payload['point_of_sale'] ?? $company->default_point_of_sale);
-        if ($pointOfSale <= 0) {
+        if (! FiscalPointOfSale::isValid($pointOfSale)) {
             throw new FiscalException('Point of sale is required.', 422, 'point_of_sale_required');
         }
 

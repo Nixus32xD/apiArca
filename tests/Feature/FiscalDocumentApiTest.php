@@ -462,7 +462,103 @@ it('returns the existing document for the same idempotency key', function (): vo
         ->assertJsonPath('data.number', 11);
 
     expect(FiscalDocument::query()->count())->toBe(1)
+        ->and($this->wsfe->authorizeCalls)->toBe(1)
+        ->and(FiscalDocument::query()->sole()->idempotency_payload_hash)->toHaveLength(64);
+});
+
+it('rejects a reused fiscal idempotency key when the amount changes', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = fiscalPayload($company->external_business_id, 'amount-mismatch');
+
+    $this->withToken('test-token')->postJson('/api/fiscal/documents', $payload)->assertCreated();
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', [...$payload, 'amounts' => [...$payload['amounts'], 'imp_total' => 122]])
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'idempotency_payload_mismatch');
+
+    expect(FiscalDocument::query()->count())->toBe(1)
         ->and($this->wsfe->authorizeCalls)->toBe(1);
+});
+
+it('rejects a reused fiscal idempotency key when the receiver changes', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = fiscalPayload($company->external_business_id, 'receiver-mismatch');
+
+    $this->withToken('test-token')->postJson('/api/fiscal/documents', $payload)->assertCreated();
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', [...$payload, 'customer' => [
+            'name' => 'Otro consumidor final',
+            'document_type' => 'CONSUMIDOR_FINAL',
+            'document_number' => '0',
+            'iva_condition' => 'consumidor_final',
+        ]])
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'idempotency_payload_mismatch');
+
+    expect($this->wsfe->authorizeCalls)->toBe(1);
+});
+
+it('rejects a reused fiscal idempotency key when the point of sale changes', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = fiscalPayload($company->external_business_id, 'point-of-sale-mismatch');
+
+    $this->withToken('test-token')->postJson('/api/fiscal/documents', $payload)->assertCreated();
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', [...$payload, 'point_of_sale' => 2])
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'idempotency_payload_mismatch');
+
+    expect($this->wsfe->authorizeCalls)->toBe(1);
+});
+
+it('accepts a fiscal idempotency replay with equivalent JSON in a different property order', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = fiscalPayload($company->external_business_id, 'canonical-json-order');
+
+    $this->withToken('test-token')->postJson('/api/fiscal/documents', $payload)->assertCreated();
+
+    $reordered = array_reverse($payload, true);
+    $reordered['amounts'] = array_reverse($payload['amounts'], true);
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $reordered)
+        ->assertOk()
+        ->assertJsonPath('meta.idempotent_replay', true);
+
+    expect($this->wsfe->authorizeCalls)->toBe(1);
+});
+
+it('derives a replay hash for historical fiscal documents with normalized payloads', function (): void {
+    $company = fiscalCompanyWithTicket();
+    $payload = fiscalPayload($company->external_business_id, 'historical-idempotency');
+
+    $this->withToken('test-token')->postJson('/api/fiscal/documents', $payload)->assertCreated();
+    $document = FiscalDocument::query()->sole();
+    $document->forceFill(['idempotency_payload_hash' => null])->save();
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $payload)
+        ->assertOk()
+        ->assertJsonPath('meta.idempotent_replay', true);
+
+    expect($document->refresh()->idempotency_payload_hash)->toHaveLength(64)
+        ->and($this->wsfe->authorizeCalls)->toBe(1);
+});
+
+it('fails closed for a historical idempotency key whose fiscal payload cannot be reconstructed', function (): void {
+    $company = fiscalCompanyWithTicket();
+    fiscalUnresolvedDocument($company, ['idempotency_key' => 'unverifiable-historical']);
+
+    $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id, 'unverifiable-historical'))
+        ->assertStatus(409)
+        ->assertJsonPath('error_code', 'idempotency_payload_mismatch');
+
+    expect(FiscalDocument::query()->count())->toBe(1)
+        ->and($this->wsfe->authorizeCalls)->toBe(0);
 });
 
 it('blocks a new emission when another numbered document in the same sequence is uncertain', function (): void {
@@ -539,17 +635,25 @@ it('isolates unresolved sequence gaps by point of sale voucher type and fiscal c
 
 it('replays an uncertain idempotency key without another authorization', function (): void {
     $company = fiscalCompanyWithTicket();
-    $existing = fiscalUnresolvedDocument($company, ['idempotency_key' => 'uncertain-idempotency']);
+    $payload = fiscalPayload($company->external_business_id, 'uncertain-idempotency');
+    $this->wsfe->authorizeException = new FiscalException('timeout', 504, 'arca_timeout');
+
+    $existing = $this->withToken('test-token')
+        ->postJson('/api/fiscal/documents', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'uncertain')
+        ->json('data');
+    $this->wsfe->authorizeException = null;
 
     $response = $this->withToken('test-token')
-        ->postJson('/api/fiscal/documents', fiscalPayload($company->external_business_id, idempotencyKey: 'uncertain-idempotency'));
+        ->postJson('/api/fiscal/documents', $payload);
 
     $response->assertOk()
         ->assertJsonPath('meta.idempotent_replay', true)
-        ->assertJsonPath('data.id', $existing->id);
+        ->assertJsonPath('data.id', $existing['id']);
 
     expect(FiscalDocument::query()->count())->toBe(1)
-        ->and($this->wsfe->authorizeCalls)->toBe(0);
+        ->and($this->wsfe->authorizeCalls)->toBe(1);
 });
 
 it('enforces idempotency at the database boundary for competing persistence attempts', function (): void {
